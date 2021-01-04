@@ -228,9 +228,11 @@ void SetIsolateErrorHandlers(v8::Isolate* isolate, const IsolateSettings& s) {
       s.fatal_error_callback : OnFatalError;
   isolate->SetFatalErrorHandler(fatal_error_cb);
 
-  auto* prepare_stack_trace_cb = s.prepare_stack_trace_callback ?
-      s.prepare_stack_trace_callback : PrepareStackTraceCallback;
-  isolate->SetPrepareStackTraceCallback(prepare_stack_trace_cb);
+  if ((s.flags & SHOULD_NOT_SET_PREPARE_STACK_TRACE_CALLBACK) == 0) {
+    auto* prepare_stack_trace_cb = s.prepare_stack_trace_callback ?
+        s.prepare_stack_trace_callback : PrepareStackTraceCallback;
+    isolate->SetPrepareStackTraceCallback(prepare_stack_trace_cb);
+  }
 }
 
 void SetIsolateMiscHandlers(v8::Isolate* isolate, const IsolateSettings& s) {
@@ -358,12 +360,14 @@ Environment* CreateEnvironment(
       thread_id);
 
 #if HAVE_INSPECTOR
-  if (inspector_parent_handle) {
-    env->InitializeInspector(
-        std::move(static_cast<InspectorParentHandleImpl*>(
-            inspector_parent_handle.get())->impl));
-  } else {
-    env->InitializeInspector({});
+  if (env->should_initialize_inspector()) {
+    if (inspector_parent_handle) {
+      env->InitializeInspector(
+          std::move(static_cast<InspectorParentHandleImpl*>(
+              inspector_parent_handle.get())->impl));
+    } else {
+      env->InitializeInspector({});
+    }
   }
 #endif
 
@@ -472,6 +476,10 @@ MultiIsolatePlatform* GetMultiIsolatePlatform(IsolateData* env) {
   return env->platform();
 }
 
+node::tracing::Agent* CreateAgent() {
+  return new node::tracing::Agent();
+}
+
 MultiIsolatePlatform* CreatePlatform(
     int thread_pool_size,
     node::tracing::TracingController* tracing_controller) {
@@ -482,8 +490,9 @@ MultiIsolatePlatform* CreatePlatform(
 
 MultiIsolatePlatform* CreatePlatform(
     int thread_pool_size,
-    v8::TracingController* tracing_controller) {
-  return MultiIsolatePlatform::Create(thread_pool_size, tracing_controller)
+    v8::TracingController* tracing_controller,
+    v8::PageAllocator* page_allocator) {
+  return MultiIsolatePlatform::Create(thread_pool_size, tracing_controller, page_allocator)
       .release();
 }
 
@@ -493,8 +502,9 @@ void FreePlatform(MultiIsolatePlatform* platform) {
 
 std::unique_ptr<MultiIsolatePlatform> MultiIsolatePlatform::Create(
     int thread_pool_size,
-    v8::TracingController* tracing_controller) {
-  return std::make_unique<NodePlatform>(thread_pool_size, tracing_controller);
+    v8::TracingController* tracing_controller,
+    v8::PageAllocator* page_allocator) {
+  return std::make_unique<NodePlatform>(thread_pool_size, tracing_controller, page_allocator);
 }
 
 MaybeLocal<Object> GetPerContextExports(Local<Context> context) {

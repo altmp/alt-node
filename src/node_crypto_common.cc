@@ -240,10 +240,10 @@ int UseSNIContext(const SSLPointer& ssl, BaseObjectPtr<SecureContext> context) {
 }
 
 const char* GetClientHelloALPN(const SSLPointer& ssl) {
+#ifndef OPENSSL_IS_BORINGSSL
   const unsigned char* buf;
   size_t len;
   size_t rem;
-
   if (!SSL_client_hello_get0_ext(
           ssl.get(),
           TLSEXT_TYPE_application_layer_protocol_negotiation,
@@ -252,17 +252,18 @@ const char* GetClientHelloALPN(const SSLPointer& ssl) {
       rem < 2) {
     return nullptr;
   }
-
   len = (buf[0] << 8) | buf[1];
   if (len + 2 != rem) return nullptr;
   return reinterpret_cast<const char*>(buf + 3);
+#endif
+  return nullptr;
 }
 
 const char* GetClientHelloServerName(const SSLPointer& ssl) {
+#ifndef OPENSSL_IS_BORINGSSL
   const unsigned char* buf;
   size_t len;
   size_t rem;
-
   if (!SSL_client_hello_get0_ext(
           ssl.get(),
           TLSEXT_TYPE_server_name,
@@ -284,6 +285,8 @@ const char* GetClientHelloServerName(const SSLPointer& ssl) {
   if (len + 2 > rem)
     return nullptr;
   return reinterpret_cast<const char*>(buf + 5);
+#endif
+  return nullptr;
 }
 
 const char* GetServerName(SSL* ssl) {
@@ -291,7 +294,10 @@ const char* GetServerName(SSL* ssl) {
 }
 
 bool SetGroups(SecureContext* sc, const char* groups) {
+#ifndef OPENSSL_IS_BORINGSSL
   return SSL_CTX_set1_groups_list(**sc, groups) == 1;
+#endif
+  return false;
 }
 
 const char* X509ErrorCode(long err) {  // NOLINT(runtime/int)
@@ -768,13 +774,13 @@ MaybeLocal<Array> GetClientHelloCiphers(
     Environment* env,
     const SSLPointer& ssl) {
   EscapableHandleScope scope(env->isolate());
-  const unsigned char* buf;
-  size_t len = SSL_client_hello_get0_ciphers(ssl.get(), &buf);
+  const unsigned char* buf = nullptr;
+  size_t len = 0; // SSL_client_hello_get0_ciphers(ssl.get(), &buf);
   size_t count = len / 2;
   MaybeStackBuffer<Local<Value>, 16> ciphers(count);
   int j = 0;
   for (size_t n = 0; n < len; n += 2) {
-    const SSL_CIPHER* cipher = SSL_CIPHER_find(ssl.get(), buf);
+    const SSL_CIPHER* cipher = nullptr; // SSL_CIPHER_find(ssl.get(), buf);
     buf += 2;
     Local<Object> obj = Object::New(env->isolate());
     if (!Set(env->context(),

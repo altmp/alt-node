@@ -288,24 +288,14 @@ Maybe<bool> Decorate(Environment* env, Local<Object> obj,
     V(BIO)                                                                    \
     V(PKCS7)                                                                  \
     V(X509V3)                                                                 \
-    V(PKCS12)                                                                 \
     V(RAND)                                                                   \
-    V(DSO)                                                                    \
     V(ENGINE)                                                                 \
     V(OCSP)                                                                   \
     V(UI)                                                                     \
     V(COMP)                                                                   \
     V(ECDSA)                                                                  \
     V(ECDH)                                                                   \
-    V(OSSL_STORE)                                                             \
-    V(FIPS)                                                                   \
-    V(CMS)                                                                    \
-    V(TS)                                                                     \
     V(HMAC)                                                                   \
-    V(CT)                                                                     \
-    V(ASYNC)                                                                  \
-    V(KDF)                                                                    \
-    V(SM2)                                                                    \
     V(USER)                                                                   \
 
 #define V(name) case ERR_LIB_##name: lib = #name "_"; break;
@@ -4581,7 +4571,7 @@ static unsigned int GetBytesOfRS(const ManagedEVPPKey& pkey) {
   if (base_id == EVP_PKEY_DSA) {
     DSA* dsa_key = EVP_PKEY_get0_DSA(pkey.get());
     // Both r and s are computed mod q, so their width is limited by that of q.
-    bits = BN_num_bits(DSA_get0_q(dsa_key));
+    bits = BN_num_bits(dsa_key->q);
   } else if (base_id == EVP_PKEY_EC) {
     EC_KEY* ec_key = EVP_PKEY_get0_EC_KEY(pkey.get());
     const EC_GROUP* ec_group = EC_KEY_get0_group(ec_key);
@@ -5069,18 +5059,6 @@ bool PublicKeyCipher::Cipher(Environment* env,
       return false;
   }
 
-  if (oaep_label_len != 0) {
-    // OpenSSL takes ownership of the label, so we need to create a copy.
-    void* label = OPENSSL_memdup(oaep_label, oaep_label_len);
-    CHECK_NOT_NULL(label);
-    if (0 >= EVP_PKEY_CTX_set0_rsa_oaep_label(ctx.get(),
-                reinterpret_cast<unsigned char*>(label),
-                                      oaep_label_len)) {
-      OPENSSL_free(label);
-      return false;
-    }
-  }
-
   size_t out_len = 0;
   if (EVP_PKEY_cipher(ctx.get(), nullptr, &out_len, data, len) <= 0)
     return false;
@@ -5213,6 +5191,7 @@ bool DiffieHellman::Init(int primeLength, int g) {
 
 bool DiffieHellman::Init(const char* p, int p_len, int g) {
   dh_.reset(DH_new());
+#if 0
   if (p_len <= 0) {
     BNerr(BN_F_BN_GENERATE_PRIME_EX, BN_R_BITS_TOO_SMALL);
     return false;
@@ -5221,6 +5200,7 @@ bool DiffieHellman::Init(const char* p, int p_len, int g) {
     DHerr(DH_F_DH_BUILTIN_GENPARAMS, DH_R_BAD_GENERATOR);
     return false;
   }
+#endif
   BIGNUM* bn_p =
       BN_bin2bn(reinterpret_cast<const unsigned char*>(p), p_len, nullptr);
   BIGNUM* bn_g = BN_new();
@@ -5236,6 +5216,7 @@ bool DiffieHellman::Init(const char* p, int p_len, int g) {
 
 bool DiffieHellman::Init(const char* p, int p_len, const char* g, int g_len) {
   dh_.reset(DH_new());
+#if 0
   if (p_len <= 0) {
     BNerr(BN_F_BN_GENERATE_PRIME_EX, BN_R_BITS_TOO_SMALL);
     return false;
@@ -5258,6 +5239,7 @@ bool DiffieHellman::Init(const char* p, int p_len, const char* g, int g_len) {
     BN_free(bn_g);
     return false;
   }
+#endif
   return VerifyContext();
 }
 
@@ -5740,8 +5722,9 @@ void ECDH::SetPrivateKey(const FunctionCallbackInfo<Value>& args) {
 
   if (!EC_KEY_set_public_key(new_key.get(), pub.get()))
     return env->ThrowError("Failed to set generated public key");
-
+#if 0
   EC_KEY_copy(ecdh->key_.get(), new_key.get());
+#endif
   ecdh->group_ = EC_KEY_get0_group(ecdh->key_.get());
 }
 
@@ -6135,6 +6118,7 @@ class DSAKeyPairGenerationConfig : public KeyPairGenerationConfig {
     if (EVP_PKEY_paramgen_init(param_ctx.get()) <= 0)
       return nullptr;
 
+#ifndef OPENSSL_IS_BORINGSSL
     if (EVP_PKEY_CTX_set_dsa_paramgen_bits(param_ctx.get(), modulus_bits_) <= 0)
       return nullptr;
 
@@ -6145,6 +6129,7 @@ class DSAKeyPairGenerationConfig : public KeyPairGenerationConfig {
         return nullptr;
       }
     }
+#endif
 
     EVP_PKEY* raw_params = nullptr;
     if (EVP_PKEY_paramgen(param_ctx.get(), &raw_params) <= 0)
@@ -6227,6 +6212,7 @@ class DHKeyPairGenerationConfig : public KeyPairGenerationConfig {
   EVPKeyCtxPointer Setup() override {
     EVPKeyPointer params;
     if (prime_info_.fixed_value_) {
+#if 0
       DHPointer dh(DH_new());
       if (!dh)
         return nullptr;
@@ -6243,6 +6229,7 @@ class DHKeyPairGenerationConfig : public KeyPairGenerationConfig {
       params = EVPKeyPointer(EVP_PKEY_new());
       CHECK(params);
       EVP_PKEY_assign_DH(params.get(), dh.release());
+#endif
     } else {
       EVPKeyCtxPointer param_ctx(EVP_PKEY_CTX_new_id(EVP_PKEY_DH, nullptr));
       if (!param_ctx)
@@ -6250,7 +6237,7 @@ class DHKeyPairGenerationConfig : public KeyPairGenerationConfig {
 
       if (EVP_PKEY_paramgen_init(param_ctx.get()) <= 0)
         return nullptr;
-
+#if 0
       if (EVP_PKEY_CTX_set_dh_paramgen_prime_len(param_ctx.get(),
                                                  prime_info_.prime_size_) <= 0)
         return nullptr;
@@ -6258,7 +6245,7 @@ class DHKeyPairGenerationConfig : public KeyPairGenerationConfig {
       if (EVP_PKEY_CTX_set_dh_paramgen_generator(param_ctx.get(),
                                                  generator_) <= 0)
         return nullptr;
-
+#endif
       EVP_PKEY* raw_params = nullptr;
       if (EVP_PKEY_paramgen(param_ctx.get(), &raw_params) <= 0)
         return nullptr;

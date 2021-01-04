@@ -134,6 +134,8 @@ using v8::Undefined;
 using v8::V8;
 using v8::Value;
 
+bool g_upstream_node_mode = true;
+
 namespace per_process {
 
 // node_revert.h
@@ -837,7 +839,9 @@ int InitializeNodeWithArgs(std::vector<std::string>* argv,
   binding::RegisterBuiltinModules();
 
   // Make inherited handles noninheritable.
-  uv_disable_stdio_inheritance();
+  if (g_upstream_node_mode) {
+    uv_disable_stdio_inheritance();
+  }
 
   // Cache the original command line to be
   // used in diagnostic reports.
@@ -871,6 +875,8 @@ int InitializeNodeWithArgs(std::vector<std::string>* argv,
     if (exit_code != 0) return exit_code;
   }
 #endif
+  if (g_upstream_node_mode) {
+  // NOTE(jeremy): indentation is intentionally wrong here, to ease rebasing.
 
   const int exit_code = ProcessGlobalArgs(argv,
                                           exec_argv,
@@ -915,6 +921,7 @@ int InitializeNodeWithArgs(std::vector<std::string>* argv,
   }
   per_process::metadata.versions.InitializeIntlVersions();
 #endif
+  }  // g_upstream_node_mode
 
   NativeModuleEnv::InitializeCodeCache();
 
