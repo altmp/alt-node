@@ -125,6 +125,7 @@ namespace node {
 
 namespace tracing {
 
+class Agent;
 class TracingController;
 
 }
@@ -336,7 +337,8 @@ class NODE_EXTERN MultiIsolatePlatform : public v8::Platform {
 enum IsolateSettingsFlags {
   MESSAGE_LISTENER_WITH_ERROR_LEVEL = 1 << 0,
   DETAILED_SOURCE_POSITIONS_FOR_PROFILING = 1 << 1,
-  SHOULD_NOT_SET_PROMISE_REJECTION_CALLBACK = 1 << 2
+  SHOULD_NOT_SET_PROMISE_REJECTION_CALLBACK = 1 << 2,
+  SHOULD_NOT_SET_PREPARE_STACK_TRACE_CALLBACK = 1 << 3
 };
 
 struct IsolateSettings {
@@ -423,7 +425,11 @@ enum Flags : uint64_t {
   kNoRegisterESMLoader = 1 << 3,
   // Set this flag to make Node.js track "raw" file descriptors, i.e. managed
   // by fs.open() and fs.close(), and close them during FreeEnvironment().
-  kTrackUnmanagedFds = 1 << 4
+  kTrackUnmanagedFds = 1 << 4,
+  // Controls whether or not the Environment should call InitializeInspector.
+  // This control is needed by embedders who may not want to initialize the V8
+  // inspector in situations where it already exists.
+  kNoInitializeInspector = 1 << 5
 };
 }  // namespace EnvironmentFlags
 
@@ -519,6 +525,8 @@ NODE_DEPRECATED("Use GetMultiIsolatePlatform(env) instead",
 // instance, if one exists.
 NODE_EXTERN MultiIsolatePlatform* GetMultiIsolatePlatform(Environment* env);
 NODE_EXTERN MultiIsolatePlatform* GetMultiIsolatePlatform(IsolateData* env);
+
+NODE_EXTERN node::tracing::Agent* CreateAgent();
 
 // Legacy variants of MultiIsolatePlatform::Create().
 NODE_DEPRECATED("Use variant taking a v8::TracingController* pointer instead",

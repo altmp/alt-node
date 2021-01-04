@@ -64,7 +64,7 @@
     # options but default values are required here as this file is also used by
     # node-gyp to build addons.
     'v8_enable_pointer_compression%': 0,
-    'v8_enable_31bit_smis_on_64bit_arch%': 0,
+    'v8_enable_31bit_smis_on_64bit_arch%': 1,
 
     # Disable V8 untrusted code mitigations.
     # See https://github.com/v8/v8/wiki/Untrusted-code-mitigations
@@ -107,6 +107,9 @@
         'clang%': 1,
         'obj_dir%': '<(PRODUCT_DIR)/obj.target',
         'v8_base': '<(PRODUCT_DIR)/libv8_snapshot.a',
+      }],
+      ['target_arch == "arm64" or target_arch == "x64"', {
+        'v8_enable_pointer_compression': 1,
       }],
       ['target_arch in "ppc64 s390x"', {
         'v8_enable_backtrace': 1,
