@@ -19,7 +19,7 @@
     'node_use_v8_platform%': 'true',
     'node_use_bundled_v8%': 'true',
     'node_module_version%': '',
-    'node_with_ltcg%': '',
+    'node_with_ltcg%': 'true',
     'node_shared_openssl%': 'false',
 
     'node_tag%': '',
@@ -64,7 +64,8 @@
     # options but default values are required here as this file is also used by
     # node-gyp to build addons.
     'v8_enable_pointer_compression%': 0,
-    'v8_enable_31bit_smis_on_64bit_arch%': 0,
+    'v8_enable_31bit_smis_on_64bit_arch%': 1,
+    'v8_enable_reverse_jsargs%': 1,
 
     # Disable V8 untrusted code mitigations.
     # See https://github.com/v8/v8/wiki/Untrusted-code-mitigations
@@ -79,7 +80,24 @@
     # TODO(refack): make v8-perfetto happen
     'v8_use_perfetto': 0,
 
+
     ##### end V8 defaults #####
+
+    # When building native modules using 'npm install' with the system npm,
+    # node-gyp uses the `process.config` of the system npm to fill config.gypi.
+    # If the system npm is not as recent as Electron's node headers, which is
+    # likely, these variables will be missing from that config.gypi, and as a
+    # result, node-gyp will fail when building the native module with an error
+    # like:
+    #
+    #  gyp: name 'enable_lto' is not defined while evaluating condition
+    #  'enable_lto=="true"' in binding.gyp while trying to load binding.gyp
+    #
+    # We set default values here to avoid that error message, even though these
+    # aren't technically accurate, because most native modules don't depend on
+    # these values being accurate.
+    'build_v8_with_gn': 'false',
+    'enable_lto%': 'false',
 
     'conditions': [
       ['OS == "win"', {
@@ -107,6 +125,9 @@
         'clang%': 1,
         'obj_dir%': '<(PRODUCT_DIR)/obj.target',
         'v8_base': '<(PRODUCT_DIR)/libv8_snapshot.a',
+      }],
+      ['target_arch == "arm64" or target_arch == "x64"', {
+        'v8_enable_pointer_compression': 1,
       }],
       ['target_arch in "ppc64 s390x"', {
         'v8_enable_backtrace': 1,
@@ -216,6 +237,26 @@
             'cflags': [ '-fPIC' ],
             'ldflags': [ '-fPIC' ]
           }],
+          ['node_with_ltcg=="true"', {
+            'msvs_settings': {
+              'VCCLCompilerTool': {
+                'WholeProgramOptimization': 'true' # /GL, whole program optimization, needed for LTCG
+              },
+              'VCLibrarianTool': {
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL', # incremental link-time code generation
+                ]
+              },
+              'VCLinkerTool': {
+                'OptimizeReferences': 2, # /OPT:REF
+                'EnableCOMDATFolding': 2, # /OPT:ICF
+                'LinkIncremental': 1, # disable incremental linking
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL', # incremental link-time code generation
+                ]
+              }
+            }
+          }]
         ],
         'msvs_settings': {
           'VCCLCompilerTool': {
@@ -352,6 +393,9 @@
       }],
       ['v8_enable_pointer_compression == 1 or v8_enable_31bit_smis_on_64bit_arch == 1', {
         'defines': ['V8_31BIT_SMIS_ON_64BIT_ARCH'],
+      }],
+      ['v8_enable_reverse_jsargs == 1', {
+        'defines': ['V8_REVERSE_JSARGS'],
       }],
       ['OS == "win"', {
         'defines': [

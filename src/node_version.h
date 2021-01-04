@@ -89,7 +89,10 @@
  * version matching should open a pull request to reserve a number in this
  * registry.
  */
+// Electron sets NODE_MODULE_VERSION in their GN configuration
+#ifndef NODE_MODULE_VERSION
 #define NODE_MODULE_VERSION 83
+#endif
 
 // The NAPI_VERSION provided by this version of the runtime. This is the version
 // which the Node binary being built supports.

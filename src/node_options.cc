@@ -371,6 +371,10 @@ EnvironmentOptionsParser::EnvironmentOptionsParser() {
             "disable loading non-context-aware addons",
             &EnvironmentOptions::force_context_aware,
             kAllowedInEnvironment);
+  AddOption("--warn-context-aware",
+          "warn when loading non-context-aware addons",
+          &EnvironmentOptions::warn_context_aware,
+          kAllowedInEnvironment);
   AddOption("--pending-deprecation",
             "emit pending deprecation warnings",
             &EnvironmentOptions::pending_deprecation,

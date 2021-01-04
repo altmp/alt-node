@@ -3,6 +3,7 @@
 #include <atomic>
 #include "env-inl.h"
 #include "node_native_module_env.h"
+#include "node_process.h"
 #include "util.h"
 
 #if HAVE_OPENSSL
@@ -463,8 +464,19 @@ void DLOpen(const FunctionCallbackInfo<Value>& args) {
       if (mp->nm_context_register_func == nullptr) {
         if (env->force_context_aware()) {
           dlib->Close();
-          THROW_ERR_NON_CONTEXT_AWARE_DISABLED(env);
-          return false;
+          char errmsg[1024];
+          snprintf(errmsg,
+                   sizeof(errmsg),
+                   "Loading non-context-aware native module in renderer: '%s', but app.allowRendererProcessReuse is true. See https://github.com/electron/electron/issues/18397.",
+                   *filename);
+          env->ThrowError(errmsg);
+        } else if (env->warn_context_aware()) {
+          char errmsg[1024];
+          snprintf(errmsg,
+                   sizeof(errmsg),
+                   "Loading non-context-aware native module in renderer: '%s'. This is deprecated, see https://github.com/electron/electron/issues/18397.",
+                   *filename);
+          ProcessEmitWarningGeneric(env, errmsg, "Electron");
         }
       }
       mp->nm_dso_handle = dlib->handle_;
@@ -606,6 +618,10 @@ void GetInternalBinding(const FunctionCallbackInfo<Value>& args) {
   }
 
   args.GetReturnValue().Set(exports);
+}
+
+node_module* get_linked_module(const char* name) {
+  return FindModule(modlist_linked, name, NM_F_LINKED);
 }
 
 void GetLinkedBinding(const FunctionCallbackInfo<Value>& args) {

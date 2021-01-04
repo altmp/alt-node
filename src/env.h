@@ -949,6 +949,8 @@ class Environment : public MemoryRetainer {
 
   inline void set_force_context_aware(bool value);
   inline bool force_context_aware() const;
+  inline void set_warn_context_aware(bool value);
+  inline bool warn_context_aware() const;
 
   // This stores whether the --abort-on-uncaught-exception flag was passed
   // to Node.
@@ -1020,6 +1022,7 @@ class Environment : public MemoryRetainer {
   inline bool owns_process_state() const;
   inline bool owns_inspector() const;
   inline bool tracks_unmanaged_fds() const;
+  inline bool should_initialize_inspector() const;
   inline uint64_t thread_id() const;
   inline worker::Worker* worker_context() const;
   Environment* worker_parent_env() const;

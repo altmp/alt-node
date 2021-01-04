@@ -550,6 +550,14 @@ inline bool Environment::force_context_aware() const {
   return options_->force_context_aware;
 }
 
+inline void Environment::set_warn_context_aware(bool value) {
+  options_->warn_context_aware = value;
+}
+
+inline bool Environment::warn_context_aware() const {
+  return options_->warn_context_aware;
+}
+
 inline void Environment::set_abort_on_uncaught_exception(bool value) {
   options_->abort_on_uncaught_exception = value;
 }
@@ -827,6 +835,10 @@ inline bool Environment::owns_inspector() const {
 
 inline bool Environment::tracks_unmanaged_fds() const {
   return flags_ & EnvironmentFlags::kTrackUnmanagedFds;
+}
+
+inline bool Environment::should_initialize_inspector() const {
+  return (flags_ & EnvironmentFlags::kNoInitializeInspector) == 0;
 }
 
 bool Environment::filehandle_close_warning() const {

@@ -38,6 +38,8 @@ import functools
 import codecs
 
 def ReadFile(filename):
+  if filename.startswith("//v8"):
+    filename = "../../" + filename[2:]
   if is_verbose:
     print(filename)
   with codecs.open(filename, "r", "utf-8") as f:
@@ -56,13 +58,15 @@ namespace native_module {{
 
 {0}
 
-void NativeModuleLoader::LoadJavaScriptSource() {{
+void NativeModuleLoader::Load{4}JavaScriptSource() {{
   {1}
 }}
 
+#if {2}
 UnionBytes NativeModuleLoader::GetConfig() {{
-  return UnionBytes(config_raw, {2});  // config.gypi
+  return UnionBytes(config_raw, {3});  // config.gypi
 }}
+#endif
 
 }}  // namespace native_module
 
@@ -112,8 +116,8 @@ def GetDefinition(var, source, step=30):
   return definition, len(code_points)
 
 
-def AddModule(filename, definitions, initializers):
-  code = ReadFile(filename)
+def AddModule(filename, definitions, initializers, ReadFileFn=ReadFile):
+  code = ReadFileFn(filename)
   name = NormalizeFileName(filename)
   slug = SLUGGER_RE.sub('_', name)
   var = slug + '_raw'
@@ -123,17 +127,27 @@ def AddModule(filename, definitions, initializers):
   initializers.append(initializer)
 
 def NormalizeFileName(filename):
-  split = filename.split(os.path.sep)
+  if filename.startswith('//v8'):
+    filename = "deps/" + filename[2:]
+  split = os.path.normpath(filename).split(os.path.sep)
   if split[0] == 'deps':
     split = ['internal'] + split
   else:  # `lib/**/*.js` so drop the 'lib' part
     split = split[1:]
   if len(split):
     filename = '/'.join(split)
+
+  # Electron-specific: when driving the node build from Electron, we generate
+  # config.gypi in a separate directory and pass the absolute path to js2c.
+  # This overrides the absolute path so that the variable names in the
+  # generated C are as if it was in the root node directory.
+  if filename.endswith("/config.gypi"):
+    filename = "config.gypi"
+
   return os.path.splitext(filename)[0]
 
 
-def JS2C(source_files, target):
+def JS2C(source_files, target, only_js):
   # Build source code lines
   definitions = []
   initializers = []
@@ -141,13 +155,26 @@ def JS2C(source_files, target):
   for filename in source_files['.js']:
     AddModule(filename, definitions, initializers)
 
-  config_def, config_size = handle_config_gypi(source_files['config.gypi'])
-  definitions.append(config_def)
+    # Electron: Expose fs module without asar support.
+    if filename == 'lib/fs.js':
+      # Node's 'fs' and 'internal/fs/<filename> have lazy-loaded circular
+      # dependencies. So to expose the unmodified Node 'fs' functionality here,
+      # we have to copy both 'fs' *and* 'internal/fs/<filename>' files and modify the
+      # copies to depend on each other instead of on our asarified 'fs' code.
+      AddModule('lib/original-fs.js', definitions, initializers, lambda _: ReadFile(filename).replace("require('internal/fs/", "require('internal/original-fs/"))
+    elif filename.startswith('lib/internal/fs/'):
+      original_fs_filename = filename.replace('internal/fs/', 'internal/original-fs/')
+      AddModule(original_fs_filename, definitions, initializers, lambda _: ReadFile(filename).replace("require('fs')", "require('original-fs')"))
+
+  config_size = 0
+  if not only_js:
+    config_def, config_size = handle_config_gypi(source_files['config.gypi'])
+    definitions.append(config_def)
 
   # Emit result
   definitions = ''.join(definitions)
   initializers = '\n  '.join(initializers)
-  out = TEMPLATE.format(definitions, initializers, config_size)
+  out = TEMPLATE.format(definitions, initializers, '0' if only_js else '1', config_size, 'Embedder' if only_js else '')
   write_if_chaged(out, target)
 
 
@@ -201,17 +228,21 @@ def main():
   )
   parser.add_argument('--target', help='output file')
   parser.add_argument('--verbose', action='store_true', help='output file')
+  parser.add_argument('--only-js', action='store_true', help='do not require or parse any config.gypi files')
   parser.add_argument('sources', nargs='*', help='input files')
   options = parser.parse_args()
   global is_verbose
   is_verbose = options.verbose
   source_files = functools.reduce(SourceFileByExt, options.sources, {})
   # Should have exactly 2 types: `.js`, and `.gypi`
-  assert len(source_files) == 2
-  # Currently config.gypi is the only `.gypi` file allowed
-  assert source_files['.gypi'] == ['config.gypi']
-  source_files['config.gypi'] = source_files.pop('.gypi')[0]
-  JS2C(source_files, options.target)
+  if options.only_js:
+    assert len(source_files) == 1
+  else:
+    assert len(source_files) == 2
+    # Currently config.gypi is the only `.gypi` file allowed
+    assert source_files['.gypi'][0].endswith('config.gypi')
+    source_files['config.gypi'] = source_files.pop('.gypi')[0]
+  JS2C(source_files, options.target, options.only_js)
 
 
 if __name__ == "__main__":
