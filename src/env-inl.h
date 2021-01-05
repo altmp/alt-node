@@ -829,10 +829,6 @@ inline bool Environment::tracks_unmanaged_fds() const {
   return flags_ & EnvironmentFlags::kTrackUnmanagedFds;
 }
 
-inline bool Environment::should_initialize_inspector() const {
-  return (flags_ & EnvironmentFlags::kNoInitializeInspector) == 0;
-}
-
 bool Environment::filehandle_close_warning() const {
   return emit_filehandle_warning_;
 }

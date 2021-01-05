@@ -385,9 +385,6 @@
       'msvs_disabled_warnings!': [4244],
 
       'conditions': [
-        [ 'node_shared=="true"', {
-          'type': 'none',
-        }],
         [ 'error_on_warn=="true"', {
           'cflags': ['-Werror'],
           'xcode_settings': {
@@ -819,7 +816,6 @@
           ],
           'libraries': [
             'Dbghelp',
-            'Winmm',
             'Psapi',
             'Ws2_32',
           ],
@@ -1266,9 +1262,6 @@
       ],
 
       'conditions': [
-        [ 'node_shared=="true"', {
-          'type': 'none',
-        }],
         [ 'node_use_openssl=="true"', {
           'defines': [
             'HAVE_OPENSSL=1',
