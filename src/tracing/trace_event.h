@@ -8,6 +8,7 @@
 #include "v8-platform.h"
 #include "tracing/agent.h"
 #include "trace_event_common.h"
+#include "node.h"
 #include <atomic>
 
 // This header file defines implementation details of how the trace macros in
@@ -310,7 +311,7 @@ const int kZeroNumArgs = 0;
 const decltype(nullptr) kGlobalScope = nullptr;
 const uint64_t kNoId = 0;
 
-class TraceEventHelper {
+class NODE_EXTERN TraceEventHelper {
  public:
   static v8::TracingController* GetTracingController();
   static void SetTracingController(v8::TracingController* controller);
