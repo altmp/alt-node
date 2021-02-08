@@ -1,0 +1,170 @@
+name: Build & deploy
+on:
+  create:
+    tags:
+      - 'v*'
+
+jobs:
+  build-windows-release:
+    name: Build windows release
+    runs-on: windows-2016
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          lfs: true
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '2.7'
+
+      - name: Install deps
+        run: choco install nasm
+
+      - name: Build
+        shell: cmd
+        run: |
+          cd alt-build && call alt-release.bat
+          cd ..
+          mkdir dist
+          copy out\Release\libnode.lib dist
+          copy out\Release\libnode.dll dist
+          copy out\Release\lib\v8_libbase.lib dist
+          copy out\Release\lib\v8_libplatform.lib dist
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: node-windows-release
+          path: ./dist/
+
+  build-windows-debug:
+    name: Build windows debug
+    runs-on: windows-2016
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          lfs: true
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '2.7'
+
+      - name: Install deps
+        run: choco install nasm
+
+      - name: Build
+        shell: cmd
+        run: |
+          cd alt-build && call alt-debug.bat
+          cd ..
+          mkdir dist
+          copy out\Debug\libnode.lib dist
+          copy out\Debug\libnode.dll dist
+          copy out\Debug\lib\v8_libbase.lib dist
+          copy out\Debug\lib\v8_libplatform.lib dist
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: node-windows-debug
+          path: ./dist/
+
+  build-linux-release:
+    name: Build linux release
+    runs-on: ubuntu-18.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+          lfs: true
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '2.7'
+
+      - name: Build
+        run: |
+          cd alt-build && bash alt-release.sh
+          cd ..
+          mkdir dist
+          cp ./out/Release/lib.target/libnode.so.72 dist/libnode.so
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: node-linux-release
+          path: ./dist/
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-18.04
+    needs: 
+      - build-windows-release
+      - build-windows-debug
+      - build-linux-release
+    steps:
+      - name: Download windows release artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: node-windows-release
+          path: dist-windows-release
+
+      - name: Download windows debug artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: node-windows-debug
+          path: dist-windows-debug
+          
+      - name: Download linux release artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: node-linux-release
+          path: dist-linux-release
+      
+      - name: Zip artifacts
+        run: |
+          zip -r -j node-windows-release dist-windows-release
+          zip -r -j node-windows-debug dist-windows-debug
+          zip -r -j node-linux-release dist-linux-release
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+
+      - name: Upload windows release artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./node-windows-release.zip
+          asset_name: node-windows-release.zip
+          asset_content_type: application/zip
+
+      - name: Upload windows debug artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./node-windows-debug.zip
+          asset_name: node-windows-debug.zip
+          asset_content_type: application/zip
+
+      - name: Upload linux release artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./node-linux-release.zip
+          asset_name: node-linux-release.zip
+          asset_content_type: application/zip
+          
