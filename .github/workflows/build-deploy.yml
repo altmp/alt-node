@@ -1,6 +1,6 @@
 name: Build & deploy
 on:
-  create:
+  push:
     tags:
       - 'v*'
 
@@ -90,7 +90,7 @@ jobs:
           cd alt-build && bash alt-release.sh
           cd ..
           mkdir dist
-          cp ./out/Release/lib.target/libnode.so.72 dist/libnode.so
+          cp ./out/Release/lib.target/libnode.so.83 dist/libnode.so.83
 
       - uses: actions/upload-artifact@v2
         with:
