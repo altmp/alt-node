@@ -92,15 +92,28 @@ jobs:
           mkdir dist
           cp ./out/Release/libnode.so.83 dist/libnode.so.83
 
+      - name: Build aarch
+        run: |
+          sudo apt-get install gcc-8-aarch64-linux-gnu g++-8-aarch64-linux-gnu
+          cd alt-build && bash alt-release-aarch.sh
+          cd ..
+          mkdir dist_aarch
+          cp ./out/Release/libnode.so.83 dist_aarch/libnode.so.83
+
       - uses: actions/upload-artifact@v2
         with:
           name: node-linux-release
           path: ./dist/
 
+      - uses: actions/upload-artifact@v2
+        with:
+          name: node-linux-release-aarch
+          path: ./dist_aarch/
+
   create-release:
     name: Create GitHub Release
     runs-on: ubuntu-18.04
-    needs: 
+    needs:
       - build-windows-release
       - build-windows-debug
       - build-linux-release
@@ -116,18 +129,25 @@ jobs:
         with:
           name: node-windows-debug
           path: dist-windows-debug
-          
+
       - name: Download linux release artifacts
         uses: actions/download-artifact@v2
         with:
           name: node-linux-release
           path: dist-linux-release
-      
+
+      - name: Download linux aarch release artifacts
+        uses: actions/download-artifact@v2
+        with:
+          name: node-linux-release-aarch
+          path: dist-linux-release-aarch
+
       - name: Zip artifacts
         run: |
           zip -r -j node-windows-release dist-windows-release
           zip -r -j node-windows-debug dist-windows-debug
           zip -r -j node-linux-release dist-linux-release
+          zip -r -j node-linux-release-aarch dist-linux-release-aarch
 
       - name: Create Release
         id: create_release
@@ -167,4 +187,13 @@ jobs:
           asset_path: ./node-linux-release.zip
           asset_name: node-linux-release.zip
           asset_content_type: application/zip
-          
+
+      - name: Upload linux aarch release artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./node-linux-release-aarch.zip
+          asset_name: node-linux-release-aarch.zip
+          asset_content_type: application/zip
