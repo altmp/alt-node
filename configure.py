@@ -1317,6 +1317,9 @@ def configure_openssl(o):
   variables['openssl_is_fips'] = b(options.openssl_is_fips)
   variables['openssl_fips'] = ''
 
+  if options.dest_cpu == 'arm64':
+    o['defines'] += ['__aarch64__']
+
   if options.openssl_no_asm:
     variables['openssl_no_asm'] = 1
 
