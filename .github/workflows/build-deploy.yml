@@ -86,7 +86,7 @@ jobs:
           cd alt-build && bash alt-release.sh
           cd ..
           mkdir dist
-          cp ./out/Release/libnode.so.83 dist/libnode.so.83
+          cp ./out/Release/libnode.so.102 dist/libnode.so.102
 
       - uses: actions/upload-artifact@v2
         with:
