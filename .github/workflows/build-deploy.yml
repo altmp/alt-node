@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: '2.7'
+          python-version: '3.9'
 
       - name: Install deps
         run: choco install nasm
@@ -48,7 +48,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: '2.7'
+          python-version: '3.9'
 
       - name: Install deps
         run: choco install nasm
@@ -79,7 +79,7 @@ jobs:
 
       - uses: actions/setup-python@v2
         with:
-          python-version: '2.7'
+          python-version: '3.9'
 
       - name: Build
         run: |
