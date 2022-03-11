@@ -123,7 +123,7 @@ void SerializeBindingData(Environment* env,
 
 bool IsSnapshotableType(FastStringKey key);
 
-class SnapshotBuilder {
+class NODE_EXTERN SnapshotBuilder {
  public:
   static std::string Generate(const std::vector<std::string> args,
                               const std::vector<std::string> exec_args);
