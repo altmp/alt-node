@@ -93,8 +93,8 @@ jobs:
           name: node-linux-release
           path: ./dist/
 
-  create-release:
-    name: Create GitHub Release
+  deploy:
+    name: Deploy
     runs-on: ubuntu-18.04
     needs:
       - build-windows-release
@@ -163,3 +163,52 @@ jobs:
           asset_path: ./node-linux-release.zip
           asset_name: node-linux-release.zip
           asset_content_type: application/zip
+
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          TAG=${GITHUB_REF/refs\/tags\//}
+          echo ::set-output name=BRANCH::${TAG/\/*}
+          echo ::set-output name=VERSION::${TAG/*\/}
+
+      - name: Install CDN upload tool
+        run: npm i @altmp/upload-tool@latest
+
+      - name: Upload windows release files to CDN
+        run: npx alt-upload dist-windows-release deps/nodejs/$BRANCH/x64_win32/Release $VERSION
+        env:
+          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
+          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.BRANCH }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
+      - name: Upload windows debug files to CDN
+        run: npx alt-upload dist-windows-debug deps/nodejs/$BRANCH/x64_win32/Debug $VERSION
+        env:
+          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
+          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.BRANCH }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
+      - name: Upload linux files to CDN
+        run: npx alt-upload dist-linux-release deps/nodejs/$BRANCH/x64_linux $VERSION
+        env:
+          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
+          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.BRANCH }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
+  delete-artifacts:
+    name: Delete artifacts
+    runs-on: ubuntu-18.04
+    needs: [ deploy ]
+    if: ${{ always() }}
+    steps:
+      - name: Delete artifacts
+        uses: geekyeggo/delete-artifact@v1
+        with:
+          name: |
+            node-windows-release
+            node-windows-debug
+            node-linux-release
