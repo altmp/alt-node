@@ -2,7 +2,9 @@ name: Build & deploy
 on:
   push:
     tags:
-      - 'v*'
+      - 'dev/*'
+      - 'rc/*'
+      - 'release/*'
 
 jobs:
   build-windows-release:
