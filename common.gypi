@@ -396,7 +396,7 @@
       }],
       [ 'OS in "linux freebsd openbsd solaris android aix cloudabi"', {
         'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', ],
-        'cflags_cc': [ '-fno-rtti', '-fno-exceptions', '-std=gnu++17' ],
+        'cflags_cc': [ '-fno-exceptions', '-std=gnu++17' ],
         'defines': [ '__STDC_FORMAT_MACROS' ],
         'ldflags': [ '-rdynamic' ],
         'target_conditions': [

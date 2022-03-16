@@ -253,9 +253,6 @@
     # Enable advanced BigInt algorithms, costing about 10-30 KB binary size
     # depending on platform.
     'v8_advanced_bigint_algorithms%': 1,
-
-    # Enable RTTI to enable the embedder to extend e.g. v8::ArrayBuffer::Allocator
-    'use_rtti%': 1
   },
 
   'target_defaults': {
