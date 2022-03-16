@@ -27,6 +27,8 @@ target_is_simulator = (target_cpu != v8_target_cpu && !v8_multi_arch_build) ||
 emit_builtins_as_inline_asm = is_win && is_clang
 
 declare_args() {
+  use_rtti = true
+
   # Print to stdout on Android.
   v8_android_log_stdout = false
 
