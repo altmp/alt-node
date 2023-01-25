@@ -36,7 +36,7 @@
 
     # Reset this number to 0 on major V8 upgrades.
     # Increment by one for each non-official patch applied to deps/v8.
-    'v8_embedder_string': '-node.15',
+    'v8_embedder_string': '-node.21',
 
     ##### V8 defaults for Node.js #####
 
@@ -212,6 +212,9 @@
             'cflags': [ '-qINLINE=::150:100000' ]
           }],
           ['OS!="mac" and OS!="win" and OS!="zos"', {
+            # -fno-omit-frame-pointer is necessary for the --perf_basic_prof
+            # flag to work correctly. perf(1) gets confused about JS stack
+            # frames otherwise, even with --call-graph dwarf.
             'cflags': [ '-fno-omit-frame-pointer' ],
           }],
           ['OS=="linux"', {
@@ -396,7 +399,7 @@
       }],
       [ 'OS in "linux freebsd openbsd solaris android aix cloudabi"', {
         'cflags': [ '-Wall', '-Wextra', '-Wno-unused-parameter', ],
-        'cflags_cc': [ '-fno-exceptions', '-std=gnu++17' ],
+        'cflags_cc': [ '-fno-rtti', '-fno-exceptions', '-std=gnu++17' ],
         'defines': [ '__STDC_FORMAT_MACROS' ],
         'ldflags': [ '-rdynamic' ],
         'target_conditions': [
@@ -497,7 +500,7 @@
           'GCC_ENABLE_CPP_RTTI': 'NO',              # -fno-rtti
           'GCC_ENABLE_PASCAL_STRINGS': 'NO',        # No -mpascal-strings
           'PREBINDING': 'NO',                       # No -Wl,-prebind
-          'MACOSX_DEPLOYMENT_TARGET': '10.13',      # -mmacosx-version-min=10.13
+          'MACOSX_DEPLOYMENT_TARGET': '10.15',      # -mmacosx-version-min=10.15
           'USE_HEADERMAP': 'NO',
           'OTHER_CFLAGS': [
             '-fno-strict-aliasing',
@@ -541,9 +544,6 @@
             },
           }],
         ],
-      }],
-      ['OS=="freebsd" and node_use_dtrace=="true"', {
-        'libraries': [ '-lelf' ],
       }],
       ['OS=="freebsd"', {
         'ldflags': [

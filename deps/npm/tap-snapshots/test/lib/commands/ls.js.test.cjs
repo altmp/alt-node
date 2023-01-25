@@ -114,23 +114,6 @@ test-npm-ls@1.0.0
 
 `
 
-exports[`test/lib/commands/ls.js TAP ls --only=development > should output tree containing only development deps 1`] = `
-test-npm-ls@1.0.0 {CWD}/tap-testdir-ls-ls---only-development
-\`-- dev-dep@1.0.0
-  \`-- foo@1.0.0
-    \`-- dog@1.0.0
-
-`
-
-exports[`test/lib/commands/ls.js TAP ls --only=prod > should output tree containing only prod deps 1`] = `
-test-npm-ls@1.0.0 {CWD}/tap-testdir-ls-ls---only-prod
-+-- chai@1.0.0
-+-- optional-dep@1.0.0
-\`-- prod-dep@1.0.0
-  \`-- dog@2.0.0
-
-`
-
 exports[`test/lib/commands/ls.js TAP ls --parseable --depth=0 > should output tree containing only top-level dependencies 1`] = `
 {CWD}/tap-testdir-ls-ls---parseable---depth-0
 {CWD}/tap-testdir-ls-ls---parseable---depth-0/node_modules/chai
@@ -204,21 +187,6 @@ exports[`test/lib/commands/ls.js TAP ls --parseable --long with extraneous deps 
 {CWD}/tap-testdir-ls-ls---parseable---long-with-extraneous-deps/node_modules/dog:dog@1.0.0
 `
 
-exports[`test/lib/commands/ls.js TAP ls --parseable --only=development > should output tree containing only development deps 1`] = `
-{CWD}/tap-testdir-ls-ls---parseable---only-development
-{CWD}/tap-testdir-ls-ls---parseable---only-development/node_modules/dev-dep
-{CWD}/tap-testdir-ls-ls---parseable---only-development/node_modules/foo
-{CWD}/tap-testdir-ls-ls---parseable---only-development/node_modules/dog
-`
-
-exports[`test/lib/commands/ls.js TAP ls --parseable --only=prod > should output tree containing only prod deps 1`] = `
-{CWD}/tap-testdir-ls-ls---parseable---only-prod
-{CWD}/tap-testdir-ls-ls---parseable---only-prod/node_modules/chai
-{CWD}/tap-testdir-ls-ls---parseable---only-prod/node_modules/optional-dep
-{CWD}/tap-testdir-ls-ls---parseable---only-prod/node_modules/prod-dep
-{CWD}/tap-testdir-ls-ls---parseable---only-prod/node_modules/prod-dep/node_modules/dog
-`
-
 exports[`test/lib/commands/ls.js TAP ls --parseable --production > should output tree containing production deps 1`] = `
 {CWD}/tap-testdir-ls-ls---parseable---production
 {CWD}/tap-testdir-ls-ls---parseable---production/node_modules/chai
@@ -285,6 +253,12 @@ exports[`test/lib/commands/ls.js TAP ls --parseable no args > should output pars
 {CWD}/tap-testdir-ls-ls---parseable-no-args/node_modules/chai
 {CWD}/tap-testdir-ls-ls---parseable-no-args/node_modules/foo
 {CWD}/tap-testdir-ls-ls---parseable-no-args/node_modules/dog
+`
+
+exports[`test/lib/commands/ls.js TAP ls --parseable overridden dep > should contain overridden outout 1`] = `
+{CWD}/tap-testdir-ls-ls---parseable-overridden-dep:test-overridden@1.0.0
+{CWD}/tap-testdir-ls-ls---parseable-overridden-dep/node_modules/foo:foo@1.0.0
+{CWD}/tap-testdir-ls-ls---parseable-overridden-dep/node_modules/bar:bar@1.0.0:OVERRIDDEN
 `
 
 exports[`test/lib/commands/ls.js TAP ls --parseable resolved points to git ref > should output tree containing git refs 1`] = `
@@ -504,6 +478,15 @@ workspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspac
 
 `
 
+exports[`test/lib/commands/ls.js TAP ls loading a tree containing workspaces > should inlude root and specified workspace 1`] = `
+workspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspaces
++-- d@1.0.0 -> ./d
+| \`-- foo@1.1.1
+|   \`-- bar@1.0.0
+\`-- pacote@1.0.0
+
+`
+
 exports[`test/lib/commands/ls.js TAP ls loading a tree containing workspaces > should list --all workspaces properly 1`] = `
 workspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspaces
 +-- a@1.0.0 -> ./a
@@ -515,7 +498,8 @@ workspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspac
 | \`-- foo@1.1.1
 |   \`-- bar@1.0.0
 +-- e@1.0.0 -> ./group/e
-\`-- f@1.0.0 -> ./group/f
++-- f@1.0.0 -> ./group/f
+\`-- pacote@1.0.0
 
 `
 
@@ -529,7 +513,8 @@ workspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspac
 | \`-- foo@1.1.1
 |   \`-- bar@1.0.0
 +-- e@1.0.0 -> ./group/e
-\`-- f@1.0.0 -> ./group/f
++-- f@1.0.0 -> ./group/f
+\`-- pacote@1.0.0
 
 `
 
@@ -543,13 +528,14 @@ exports[`test/lib/commands/ls.js TAP ls loading a tree containing workspaces > s
 [0m+-- [32md@1.0.0[39m -> ./d[0m
 [0m| \`-- foo@1.1.1[0m
 [0m+-- [32me@1.0.0[39m -> ./group/e[0m
-[0m\`-- [32mf@1.0.0[39m -> ./group/f[0m
+[0m+-- [32mf@1.0.0[39m -> ./group/f[0m
+[0m\`-- pacote@1.0.0[0m
 [0m[0m
 `
 
 exports[`test/lib/commands/ls.js TAP ls loading a tree containing workspaces > should not list workspaces with --no-workspaces 1`] = `
 [0mworkspaces-tree@1.0.0 {CWD}/tap-testdir-ls-ls-loading-a-tree-containing-workspaces[0m
-[0m\`-- (empty)[0m
+[0m\`-- pacote@1.0.0[0m
 [0m[0m
 `
 
@@ -585,6 +571,20 @@ test-npm-ls@1.0.0 {CWD}/tap-testdir-ls-ls-no-args
 \`-- foo@1.0.0
   \`-- dog@1.0.0
 
+`
+
+exports[`test/lib/commands/ls.js TAP ls overridden dep > should contain overridden outout 1`] = `
+test-overridden@1.0.0 {CWD}/tap-testdir-ls-ls-overridden-dep
+\`-- foo@1.0.0
+  \`-- bar@1.0.0 overridden
+
+`
+
+exports[`test/lib/commands/ls.js TAP ls overridden dep w/ color > should contain overridden outout 1`] = `
+[0mtest-overridden@1.0.0 {CWD}/tap-testdir-ls-ls-overridden-dep-w-color[0m
+[0m\`-- foo@1.0.0[0m
+[0m  \`-- bar@1.0.0 [90moverridden[39m[0m
+[0m[0m
 `
 
 exports[`test/lib/commands/ls.js TAP ls print deduped symlinks > should output tree containing linked deps 1`] = `
@@ -695,6 +695,13 @@ dedupe-entries@1.0.0 {CWD}/tap-testdir-ls-ls-with-no-args-dedupe-entries-and-not
 +-- @npmcli/a@1.0.0
 +-- @npmcli/b@1.1.2
 \`-- @npmcli/c@1.0.0
+
+`
+
+exports[`test/lib/commands/ls.js TAP ls workspace and missing optional dep > should omit missing optional dep 1`] = `
+root@ {CWD}/tap-testdir-ls-ls-workspace-and-missing-optional-dep
++-- baz@1.0.0 -> ./baz
+\`-- foo@1.0.0
 
 `
 

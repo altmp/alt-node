@@ -13,20 +13,22 @@ t.formatSnapshot = obj =>
     (k, v) => {
       try {
         return JSON.parse(v)
-      } catch {}
+      } catch {
+        // leave invalid JSON as a string
+      }
       return v
     },
     2
   )
 
-// Run shrinkwrap against a specified testdir with config items
+// Run shrinkwrap against a specified prefixDir with config items
 // and make some assertions that should always be true. Sets
 // the results on t.context for use in child tests
-const shrinkwrap = async (t, testdir = {}, config = {}, mocks = {}) => {
+const shrinkwrap = async (t, prefixDir = {}, config = {}, mocks = {}) => {
   const { npm, logs } = await loadMockNpm(t, {
     mocks,
     config,
-    testdir,
+    prefixDir,
   })
 
   await npm.exec('shrinkwrap', [])
@@ -38,7 +40,7 @@ const shrinkwrap = async (t, testdir = {}, config = {}, mocks = {}) => {
   t.same(logs.warn, [], 'no warnings')
   t.teardown(() => delete t.context)
   t.context = {
-    localPrefix: testdir,
+    localPrefix: prefixDir,
     config,
     shrinkwrap: JSON.parse(fs.readFileSync(newFile)),
     logs: logs.notice.map(([, m]) => m),

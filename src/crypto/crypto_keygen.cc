@@ -1,5 +1,4 @@
 #include "crypto/crypto_keygen.h"
-#include "allocated_buffer-inl.h"
 #include "async_wrap-inl.h"
 #include "base_object-inl.h"
 #include "debug_utils-inl.h"
@@ -66,14 +65,11 @@ Maybe<bool> SecretKeyGenTraits::AdditionalConfig(
     SecretKeyGenConfig* params) {
   Environment* env = Environment::GetCurrent(args);
   CHECK(args[*offset]->IsUint32());
-  params->length = static_cast<size_t>(
-      std::trunc(args[*offset].As<Uint32>()->Value() / CHAR_BIT));
+  params->length = args[*offset].As<Uint32>()->Value() / CHAR_BIT;
   if (params->length > INT_MAX) {
-    const std::string msg{
-      SPrintF("length must be less than or equal to %s bits",
-              static_cast<uint64_t>(INT_MAX) * CHAR_BIT)
-    };
-    THROW_ERR_OUT_OF_RANGE(env, msg.c_str());
+    THROW_ERR_OUT_OF_RANGE(env,
+                           "length must be less than or equal to %u bits",
+                           static_cast<uint64_t>(INT_MAX) * CHAR_BIT);
     return Nothing<bool>();
   }
   *offset += 1;
@@ -85,7 +81,13 @@ KeyGenJobStatus SecretKeyGenTraits::DoKeyGen(
     SecretKeyGenConfig* params) {
   CHECK_LE(params->length, INT_MAX);
   params->out = MallocOpenSSL<char>(params->length);
-  EntropySource(reinterpret_cast<unsigned char*>(params->out), params->length);
+  if (CSPRNG(reinterpret_cast<unsigned char*>(params->out),
+             params->length).is_err()) {
+    OPENSSL_clear_free(params->out, params->length);
+    params->out = nullptr;
+    params->length = 0;
+    return KeyGenJobStatus::FAILED;
+  }
   return KeyGenJobStatus::OK;
 }
 

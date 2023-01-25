@@ -142,20 +142,14 @@ npm command-line interface
 
 <section id="table_of_contents">
 <h2 id="table-of-contents">Table of contents</h2>
-<div id="_table_of_contents"><ul><li><a href="#synopsis">Synopsis</a></li><li><a href="#description">Description</a></li><li><a href="#configuration">Configuration</a></li><ul><li><a href="#registry"><code>registry</code></a></li><li><a href="#scope"><code>scope</code></a></li></ul><li><a href="#see-also">See Also</a></li></ul></div>
+<div id="_table_of_contents"><ul><li><a href="#synopsis">Synopsis</a></li><li><a href="#description">Description</a></li><li><a href="#configuration">Configuration</a></li><ul><li><a href="#registry"><code>registry</code></a></li><li><a href="#scope"><code>scope</code></a></li><li><a href="#auth-type"><code>auth-type</code></a></li></ul><li><a href="#see-also">See Also</a></li></ul></div>
 </section>
 
 <div id="_content"><h3 id="synopsis">Synopsis</h3>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
 <pre lang="bash"><code>npm adduser
 
 aliases: login, add-user
 </code></pre>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
 <p>Note: This command is unaware of workspaces.</p>
 <h3 id="description">Description</h3>
 <p>Create or verify a user named <code>&lt;username&gt;</code> in the specified registry, and
@@ -170,17 +164,12 @@ the username, password and email address must all match with
 your existing record.</p>
 <p><code>npm login</code> is an alias to <code>adduser</code> and behaves exactly the same way.</p>
 <h3 id="configuration">Configuration</h3>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
 <h4 id="registry"><code>registry</code></h4>
 <ul>
 <li>Default: "<a href="https://registry.npmjs.org/">https://registry.npmjs.org/</a>"</li>
 <li>Type: URL</li>
 </ul>
 <p>The base URL of the npm registry.</p>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
 <h4 id="scope"><code>scope</code></h4>
 <ul>
 <li>Default: the scope of the current project, if any, or ""</li>
@@ -202,9 +191,14 @@ installation of packages specified according to the pattern
 # instead of just named "whatever"
 npm init --scope=@foo --yes
 </code></pre>
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
-<!-- raw HTML omitted -->
+<h4 id="auth-type"><code>auth-type</code></h4>
+<ul>
+<li>Default: "legacy"</li>
+<li>Type: "legacy", "web", "sso", "saml", "oauth", or "webauthn"</li>
+</ul>
+<p>NOTE: auth-type values "sso", "saml", "oauth", and "webauthn" will be
+removed in a future version.</p>
+<p>What authentication strategy to use with <code>login</code>.</p>
 <h3 id="see-also">See Also</h3>
 <ul>
 <li><a href="../using-npm/registry.html">npm registry</a></li>

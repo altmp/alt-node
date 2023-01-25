@@ -1,4 +1,4 @@
-.TH "NPM\-EXEC" "1" "February 2022" "" ""
+.TH "NPM\-EXEC" "1" "November 2022" "" ""
 .SH "NAME"
 \fBnpm-exec\fR \- Run a command from a local or remote npm package
 .SS Synopsis
@@ -129,7 +129,7 @@ Type: String (can be set multiple times)
 
 .RE
 .P
-The package to install for npm help \fBexec\fP
+The package or packages to install for npm help exec
 .SS \fBcall\fP
 .RS 0
 .IP \(bu 2
@@ -215,6 +215,8 @@ Include the workspace root when workspaces are enabled for a command\.
 When false, specifying individual workspaces via the \fBworkspace\fP config, or
 all workspaces via the \fBworkspaces\fP flag, will cause npm to operate only on
 the specified workspaces, and not on the root project\.
+.P
+This value is not exported to the environment for child processes\.
 .SS Examples
 .P
 Run the version of \fBtap\fP in the local dependencies, with the provided
@@ -359,7 +361,7 @@ in the \fBnpx\fP executable for backwards compatibility\.
 .P
 The npm cli utilizes its internal package cache when using the package
 name specified\.  You can use the following to change how and when the
-cli uses this cache\. See npm help \fBcache\fP for more on
+cli uses this cache\. See npm help cache for more on
 how the cache works\.
 .SS prefer\-online
 .P

@@ -1,5 +1,5 @@
 const { dirname } = require('path')
-const { cmdList } = require('./cmd-list')
+const { commands } = require('./cmd-list')
 const localeCompare = require('@isaacs/string-locale-compare')('en')
 
 module.exports = async (npm) => {
@@ -35,7 +35,7 @@ const allCommands = async (npm) => {
   if (npm.config.get('long')) {
     return usages(npm)
   }
-  return ('\n    ' + wrap(cmdList))
+  return ('\n    ' + wrap(commands))
 }
 
 const wrap = (arr) => {
@@ -45,7 +45,7 @@ const wrap = (arr) => {
     : Math.min(60, Math.max(process.stdout.columns - 16, 24))
 
   let l = 0
-  for (const c of arr.sort((a, b) => a < b ? -1 : 1)) {
+  for (const c of arr) {
     if (out[l].length + c.length + 2 < line) {
       out[l] += ', ' + c
     } else {
@@ -53,14 +53,14 @@ const wrap = (arr) => {
       out[l] = c
     }
   }
-  return out.join('\n    ').substr(2)
+  return out.join('\n    ').slice(2)
 }
 
 const usages = async (npm) => {
   // return a string of <command>: <usage>
   let maxLen = 0
   const set = []
-  for (const c of cmdList) {
+  for (const c of commands) {
     const cmd = await npm.cmd(c)
     set.push([c, cmd.usage])
     maxLen = Math.max(maxLen, c.length)

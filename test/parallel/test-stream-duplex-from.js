@@ -2,7 +2,7 @@
 
 const common = require('../common');
 const assert = require('assert');
-const { Duplex, Readable, Writable, pipeline } = require('stream');
+const { Duplex, Readable, Writable, pipeline, PassThrough } = require('stream');
 const { Blob } = require('buffer');
 
 {
@@ -142,7 +142,7 @@ const { Blob } = require('buffer');
       }
       assert.strictEqual(ret, 'abcdefghi');
     },
-    common.mustCall(() => {}),
+    common.mustSucceed(),
   );
 }
 
@@ -155,10 +155,10 @@ const { Blob } = require('buffer');
 // Ensure that Duplex.from works for blobs
 {
   const blob = new Blob(['blob']);
-  const expecteByteLength = blob.size;
+  const expectedByteLength = blob.size;
   const duplex = Duplex.from(blob);
   duplex.on('data', common.mustCall((arrayBuffer) => {
-    assert.strictEqual(arrayBuffer.byteLength, expecteByteLength);
+    assert.strictEqual(arrayBuffer.byteLength, expectedByteLength);
   }));
 }
 
@@ -277,4 +277,25 @@ const { Blob } = require('buffer');
   }));
 
   duplex.write('test');
+}
+
+{
+  const through = new PassThrough({ objectMode: true });
+
+  let res = '';
+  const d = Readable.from(['foo', 'bar'], { objectMode: true })
+    .pipe(Duplex.from({
+      writable: through,
+      readable: through
+    }));
+
+  d.on('data', (data) => {
+    d.pause();
+    setImmediate(() => {
+      d.resume();
+    });
+    res += data;
+  }).on('end', common.mustCall(() => {
+    assert.strictEqual(res, 'foobar');
+  })).on('close', common.mustCall());
 }

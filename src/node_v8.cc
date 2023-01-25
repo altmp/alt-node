@@ -47,19 +47,21 @@ using v8::Uint32;
 using v8::V8;
 using v8::Value;
 
-
-#define HEAP_STATISTICS_PROPERTIES(V)                                         \
-  V(0, total_heap_size, kTotalHeapSizeIndex)                                  \
-  V(1, total_heap_size_executable, kTotalHeapSizeExecutableIndex)             \
-  V(2, total_physical_size, kTotalPhysicalSizeIndex)                          \
-  V(3, total_available_size, kTotalAvailableSize)                             \
-  V(4, used_heap_size, kUsedHeapSizeIndex)                                    \
-  V(5, heap_size_limit, kHeapSizeLimitIndex)                                  \
-  V(6, malloced_memory, kMallocedMemoryIndex)                                 \
-  V(7, peak_malloced_memory, kPeakMallocedMemoryIndex)                        \
-  V(8, does_zap_garbage, kDoesZapGarbageIndex)                                \
-  V(9, number_of_native_contexts, kNumberOfNativeContextsIndex)               \
-  V(10, number_of_detached_contexts, kNumberOfDetachedContextsIndex)
+#define HEAP_STATISTICS_PROPERTIES(V)                                          \
+  V(0, total_heap_size, kTotalHeapSizeIndex)                                   \
+  V(1, total_heap_size_executable, kTotalHeapSizeExecutableIndex)              \
+  V(2, total_physical_size, kTotalPhysicalSizeIndex)                           \
+  V(3, total_available_size, kTotalAvailableSize)                              \
+  V(4, used_heap_size, kUsedHeapSizeIndex)                                     \
+  V(5, heap_size_limit, kHeapSizeLimitIndex)                                   \
+  V(6, malloced_memory, kMallocedMemoryIndex)                                  \
+  V(7, peak_malloced_memory, kPeakMallocedMemoryIndex)                         \
+  V(8, does_zap_garbage, kDoesZapGarbageIndex)                                 \
+  V(9, number_of_native_contexts, kNumberOfNativeContextsIndex)                \
+  V(10, number_of_detached_contexts, kNumberOfDetachedContextsIndex)           \
+  V(11, total_global_handles_size, kTotalGlobalHandlesSizeIndex)               \
+  V(12, used_global_handles_size, kUsedGlobalHandlesSizeIndex)                 \
+  V(13, external_memory, kExternalMemoryIndex)
 
 #define V(a, b, c) +1
 static constexpr size_t kHeapStatisticsPropertiesCount =
@@ -80,7 +82,8 @@ static constexpr size_t kHeapSpaceStatisticsPropertiesCount =
 #define HEAP_CODE_STATISTICS_PROPERTIES(V)                                     \
   V(0, code_and_metadata_size, kCodeAndMetadataSizeIndex)                      \
   V(1, bytecode_and_metadata_size, kBytecodeAndMetadataSizeIndex)              \
-  V(2, external_script_source_size, kExternalScriptSourceSizeIndex)
+  V(2, external_script_source_size, kExternalScriptSourceSizeIndex)            \
+  V(3, cpu_profiler_metadata_size, kCPUProfilerMetaDataSizeIndex)
 
 #define V(a, b, c) +1
 static const size_t kHeapCodeStatisticsPropertiesCount =
@@ -108,29 +111,33 @@ BindingData::BindingData(Environment* env, Local<Object> obj)
       .Check();
 }
 
-void BindingData::PrepareForSerialization(Local<Context> context,
+bool BindingData::PrepareForSerialization(Local<Context> context,
                                           v8::SnapshotCreator* creator) {
   // We'll just re-initialize the buffers in the constructor since their
   // contents can be thrown away once consumed in the previous call.
   heap_statistics_buffer.Release();
   heap_space_statistics_buffer.Release();
   heap_code_statistics_buffer.Release();
+  // Return true because we need to maintain the reference to the binding from
+  // JS land.
+  return true;
 }
 
 void BindingData::Deserialize(Local<Context> context,
                               Local<Object> holder,
                               int index,
-                              InternalFieldInfo* info) {
-  DCHECK_EQ(index, BaseObject::kSlot);
+                              InternalFieldInfoBase* info) {
+  DCHECK_EQ(index, BaseObject::kEmbedderType);
   HandleScope scope(context->GetIsolate());
   Environment* env = Environment::GetCurrent(context);
   BindingData* binding = env->AddBindingData<BindingData>(context, holder);
   CHECK_NOT_NULL(binding);
 }
 
-InternalFieldInfo* BindingData::Serialize(int index) {
-  DCHECK_EQ(index, BaseObject::kSlot);
-  InternalFieldInfo* info = InternalFieldInfo::New(type());
+InternalFieldInfoBase* BindingData::Serialize(int index) {
+  DCHECK_EQ(index, BaseObject::kEmbedderType);
+  InternalFieldInfo* info =
+      InternalFieldInfoBase::New<InternalFieldInfo>(type());
   return info;
 }
 
@@ -148,6 +155,15 @@ void CachedDataVersionTag(const FunctionCallbackInfo<Value>& args) {
       Integer::NewFromUnsigned(env->isolate(),
                                ScriptCompiler::CachedDataVersionTag());
   args.GetReturnValue().Set(result);
+}
+
+void SetHeapSnapshotNearHeapLimit(const FunctionCallbackInfo<Value>& args) {
+  CHECK(args[0]->IsUint32());
+  Environment* env = Environment::GetCurrent(args);
+  uint32_t limit = args[0].As<v8::Uint32>()->Value();
+  CHECK_GT(limit, 0);
+  env->AddHeapSnapshotNearHeapLimitCallback();
+  env->set_heap_snapshot_near_heap_limit(limit);
 }
 
 void UpdateHeapStatisticsBuffer(const FunctionCallbackInfo<Value>& args) {
@@ -203,13 +219,21 @@ void Initialize(Local<Object> target,
       env->AddBindingData<BindingData>(context, target);
   if (binding_data == nullptr) return;
 
-  env->SetMethodNoSideEffect(target, "cachedDataVersionTag",
-                             CachedDataVersionTag);
-  env->SetMethod(
-      target, "updateHeapStatisticsBuffer", UpdateHeapStatisticsBuffer);
+  SetMethodNoSideEffect(
+      context, target, "cachedDataVersionTag", CachedDataVersionTag);
+  SetMethodNoSideEffect(context,
+                        target,
+                        "setHeapSnapshotNearHeapLimit",
+                        SetHeapSnapshotNearHeapLimit);
+  SetMethod(context,
+            target,
+            "updateHeapStatisticsBuffer",
+            UpdateHeapStatisticsBuffer);
 
-  env->SetMethod(
-      target, "updateHeapCodeStatisticsBuffer", UpdateHeapCodeStatisticsBuffer);
+  SetMethod(context,
+            target,
+            "updateHeapCodeStatisticsBuffer",
+            UpdateHeapCodeStatisticsBuffer);
 
   size_t number_of_heap_spaces = env->isolate()->NumberOfHeapSpaces();
 
@@ -222,19 +246,21 @@ void Initialize(Local<Object> target,
     heap_spaces[i] = String::NewFromUtf8(env->isolate(), s.space_name())
                                              .ToLocalChecked();
   }
-  target->Set(env->context(),
-              FIXED_ONE_BYTE_STRING(env->isolate(), "kHeapSpaces"),
-              Array::New(env->isolate(),
-                         heap_spaces.out(),
-                         number_of_heap_spaces)).Check();
+  target
+      ->Set(
+          context,
+          FIXED_ONE_BYTE_STRING(env->isolate(), "kHeapSpaces"),
+          Array::New(env->isolate(), heap_spaces.out(), number_of_heap_spaces))
+      .Check();
 
-  env->SetMethod(target,
-                 "updateHeapSpaceStatisticsBuffer",
-                 UpdateHeapSpaceStatisticsBuffer);
+  SetMethod(context,
+            target,
+            "updateHeapSpaceStatisticsBuffer",
+            UpdateHeapSpaceStatisticsBuffer);
 
 #define V(i, _, name)                                                          \
   target                                                                       \
-      ->Set(env->context(),                                                    \
+      ->Set(context,                                                           \
             FIXED_ONE_BYTE_STRING(env->isolate(), #name),                      \
             Uint32::NewFromUnsigned(env->isolate(), i))                        \
       .Check();
@@ -245,7 +271,7 @@ void Initialize(Local<Object> target,
 #undef V
 
   // Export symbols used by v8.setFlagsFromString()
-  env->SetMethod(target, "setFlagsFromString", SetFlagsFromString);
+  SetMethod(context, target, "setFlagsFromString", SetFlagsFromString);
 }
 
 void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
@@ -254,6 +280,7 @@ void RegisterExternalReferences(ExternalReferenceRegistry* registry) {
   registry->Register(UpdateHeapCodeStatisticsBuffer);
   registry->Register(UpdateHeapSpaceStatisticsBuffer);
   registry->Register(SetFlagsFromString);
+  registry->Register(SetHeapSnapshotNearHeapLimit);
 }
 
 }  // namespace v8_utils

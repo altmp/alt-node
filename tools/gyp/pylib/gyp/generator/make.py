@@ -99,10 +99,13 @@ def CalculateVariables(default_variables, params):
         default_variables.setdefault("OS", operating_system)
         if flavor == "aix":
             default_variables.setdefault("SHARED_LIB_SUFFIX", ".a")
+        elif flavor == "zos":
+            default_variables.setdefault("SHARED_LIB_SUFFIX", ".x")
         else:
             default_variables.setdefault("SHARED_LIB_SUFFIX", ".so")
         default_variables.setdefault("SHARED_LIB_DIR", "$(builddir)/lib.$(TOOLSET)")
         default_variables.setdefault("LIB_DIR", "$(obj).$(TOOLSET)")
+
 
 def CalculateGeneratorInputInfo(params):
     """Calculate the generator specific info that gets fed to input (called by
@@ -155,12 +158,12 @@ cmd_link = $(LINK.$(TOOLSET)) -o $@ $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -Wl,--s
 
 # Note: this does not handle spaces in paths
 define xargs
-	$(1) $(word 1,$(2))
+  $(1) $(word 1,$(2))
 $(if $(word 2,$(2)),$(call xargs,$(1),$(wordlist 2,$(words $(2)),$(2))))
 endef
 
 define write-to-file
-	@: >$(1)
+  @: >$(1)
 $(call xargs,@printf "%s\\n" >>$(1),$(2))
 endef
 
@@ -224,12 +227,12 @@ cmd_alink_thin = rm -f $@ && $(AR.$(TOOLSET)) crsT $@ $(filter %.o,$^)
 
 # Note: this does not handle spaces in paths
 define xargs
-	$(1) $(word 1,$(2))
+  $(1) $(word 1,$(2))
 $(if $(word 2,$(2)),$(call xargs,$(1),$(wordlist 2,$(words $(2)),$(2))))
 endef
 
 define write-to-file
-	@: >$(1)
+  @: >$(1)
 $(call xargs,@printf "%s\\n" >>$(1),$(2))
 endef
 
@@ -286,6 +289,24 @@ cmd_solink_module = $(LINK.$(TOOLSET)) -shared $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSE
 """  # noqa: E501
 
 
+LINK_COMMANDS_OS400 = """\
+quiet_cmd_alink = AR($(TOOLSET)) $@
+cmd_alink = rm -f $@ && $(AR.$(TOOLSET)) -X64 crs $@ $(filter %.o,$^)
+
+quiet_cmd_alink_thin = AR($(TOOLSET)) $@
+cmd_alink_thin = rm -f $@ && $(AR.$(TOOLSET)) -X64 crs $@ $(filter %.o,$^)
+
+quiet_cmd_link = LINK($(TOOLSET)) $@
+cmd_link = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(LD_INPUTS) $(LIBS)
+
+quiet_cmd_solink = SOLINK($(TOOLSET)) $@
+cmd_solink = $(LINK.$(TOOLSET)) -shared $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(LD_INPUTS) $(LIBS)
+
+quiet_cmd_solink_module = SOLINK_MODULE($(TOOLSET)) $@
+cmd_solink_module = $(LINK.$(TOOLSET)) -shared $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(filter-out FORCE_DO_CMD, $^) $(LIBS)
+"""  # noqa: E501
+
+
 LINK_COMMANDS_OS390 = """\
 quiet_cmd_alink = AR($(TOOLSET)) $@
 cmd_alink = rm -f $@ && $(AR.$(TOOLSET)) crs $@ $(filter %.o,$^)
@@ -297,10 +318,10 @@ quiet_cmd_link = LINK($(TOOLSET)) $@
 cmd_link = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(LD_INPUTS) $(LIBS)
 
 quiet_cmd_solink = SOLINK($(TOOLSET)) $@
-cmd_solink = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(LD_INPUTS) $(LIBS) -Wl,DLL
+cmd_solink = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -Wl,DLL -o $(patsubst %.x,%.so,$@) $(LD_INPUTS) $(LIBS) && if [ -f $(notdir $@) ]; then /bin/cp $(notdir $@) $@; else true; fi
 
 quiet_cmd_solink_module = SOLINK_MODULE($(TOOLSET)) $@
-cmd_solink_module = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(filter-out FORCE_DO_CMD, $^) $(LIBS) -Wl,DLL
+cmd_solink_module = $(LINK.$(TOOLSET)) $(GYP_LDFLAGS) $(LDFLAGS.$(TOOLSET)) -o $@ $(filter-out FORCE_DO_CMD, $^) $(LIBS)
 """  # noqa: E501
 
 
@@ -448,6 +469,9 @@ cmd_touch = touch $@
 quiet_cmd_copy = COPY $@
 # send stderr to /dev/null to ignore messages when linking directories.
 cmd_copy = ln -f "$<" "$@" 2>/dev/null || (rm -rf "$@" && cp %(copy_archive_args)s "$<" "$@")
+
+quiet_cmd_symlink = SYMLINK $@
+cmd_symlink = ln -sf "$<" "$@"
 
 %(link_commands)s
 """  # noqa: E501
@@ -1030,12 +1054,20 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             # libraries, but until everything is made cross-compile safe, also use
             # target libraries.
             # TODO(piman): when everything is cross-compile safe, remove lib.target
-            self.WriteLn(
-                "cmd_%s = LD_LIBRARY_PATH=$(builddir)/lib.host:"
-                "$(builddir)/lib.target:$$LD_LIBRARY_PATH; "
-                "export LD_LIBRARY_PATH; "
-                "%s%s" % (name, cd_action, command)
-            )
+            if self.flavor == "zos" or self.flavor == "aix":
+                self.WriteLn(
+                    "cmd_%s = LIBPATH=$(builddir)/lib.host:"
+                    "$(builddir)/lib.target:$$LIBPATH; "
+                    "export LIBPATH; "
+                    "%s%s" % (name, cd_action, command)
+                )
+            else:
+                self.WriteLn(
+                    "cmd_%s = LD_LIBRARY_PATH=$(builddir)/lib.host:"
+                    "$(builddir)/lib.target:$$LD_LIBRARY_PATH; "
+                    "export LD_LIBRARY_PATH; "
+                    "%s%s" % (name, cd_action, command)
+                )
             self.WriteLn()
             outputs = [self.Absolutify(o) for o in outputs]
             # The makefile rules are all relative to the top dir, but the gyp actions
@@ -1529,6 +1561,8 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             target_prefix = "lib"
             if self.flavor == "aix":
                 target_ext = ".a"
+            elif self.flavor == "zos":
+                target_ext = ".x"
             else:
                 target_ext = ".so"
         elif self.type == "none":
@@ -1608,6 +1642,14 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             # This hack makes it work:
             # link_deps.extend(spec.get('libraries', []))
         return (gyp.common.uniquer(deps), gyp.common.uniquer(link_deps))
+
+    def GetSharedObjectFromSidedeck(self, sidedeck):
+        """Return the shared object files based on sidedeck"""
+        return re.sub(r"\.x$", ".so", sidedeck)
+
+    def GetUnversionedSidedeckFromSidedeck(self, sidedeck):
+        """Return the shared object files based on sidedeck"""
+        return re.sub(r"\.\d+\.x$", ".x", sidedeck)
 
     def WriteDependencyOnExtraOutputs(self, target, extra_outputs):
         self.WriteMakeRule(
@@ -1817,35 +1859,35 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                 self.flavor not in ("mac", "openbsd", "netbsd", "win")
                 and not self.is_standalone_static_library
             ):
-                if self.flavor in ('linux', 'android'):
-                  self.WriteMakeRule(
-                    [self.output_binary],
-                    link_deps,
-                    actions = ['$(call create_thin_archive,$@,$^)']
-                  )
+                if self.flavor in ("linux", "android"):
+                    self.WriteMakeRule(
+                        [self.output_binary],
+                        link_deps,
+                        actions=["$(call create_thin_archive,$@,$^)"],
+                    )
                 else:
-                  self.WriteDoCmd(
-                      [self.output_binary],
-                      link_deps,
-                      "alink_thin",
-                      part_of_all,
-                      postbuilds=postbuilds,
-                  )
+                    self.WriteDoCmd(
+                        [self.output_binary],
+                        link_deps,
+                        "alink_thin",
+                        part_of_all,
+                        postbuilds=postbuilds,
+                    )
             else:
-              if self.flavor in ('linux', 'android'):
-                self.WriteMakeRule(
-                    [self.output_binary],
-                    link_deps,
-                    actions = ['$(call create_archive,$@,$^)']
-                )
-              else:
-                self.WriteDoCmd(
-                    [self.output_binary],
-                    link_deps,
-                    "alink",
-                    part_of_all,
-                    postbuilds=postbuilds,
-                )
+                if self.flavor in ("linux", "android"):
+                    self.WriteMakeRule(
+                        [self.output_binary],
+                        link_deps,
+                        actions=["$(call create_archive,$@,$^)"],
+                    )
+                else:
+                    self.WriteDoCmd(
+                        [self.output_binary],
+                        link_deps,
+                        "alink",
+                        part_of_all,
+                        postbuilds=postbuilds,
+                    )
         elif self.type == "shared_library":
             self.WriteLn(
                 "%s: LD_INPUTS := %s"
@@ -1861,6 +1903,17 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                 part_of_all,
                 postbuilds=postbuilds,
             )
+            # z/OS has a .so target as well as a sidedeck .x target
+            if self.flavor == "zos":
+                self.WriteLn(
+                    "%s: %s"
+                    % (
+                        QuoteSpaces(
+                            self.GetSharedObjectFromSidedeck(self.output_binary)
+                        ),
+                        QuoteSpaces(self.output_binary),
+                    )
+                )
         elif self.type == "loadable_module":
             for link_dep in link_deps:
                 assert " " not in link_dep, (
@@ -1918,7 +1971,9 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
             else:
                 file_desc = "executable"
             install_path = self._InstallableTargetInstallPath()
-            installable_deps = [self.output]
+            installable_deps = []
+            if self.flavor != "zos":
+                installable_deps.append(self.output)
             if (
                 self.flavor == "mac"
                 and "product_dir" not in spec
@@ -1943,7 +1998,30 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                     comment="Copy this to the %s output path." % file_desc,
                     part_of_all=part_of_all,
                 )
-                installable_deps.append(install_path)
+                if self.flavor != "zos":
+                    installable_deps.append(install_path)
+            if self.flavor == "zos" and self.type == "shared_library":
+                # lib.target/libnode.so has a dependency on $(obj).target/libnode.so
+                self.WriteDoCmd(
+                    [self.GetSharedObjectFromSidedeck(install_path)],
+                    [self.GetSharedObjectFromSidedeck(self.output)],
+                    "copy",
+                    comment="Copy this to the %s output path." % file_desc,
+                    part_of_all=part_of_all,
+                )
+                # Create a symlink of libnode.x to libnode.version.x
+                self.WriteDoCmd(
+                    [self.GetUnversionedSidedeckFromSidedeck(install_path)],
+                    [install_path],
+                    "symlink",
+                    comment="Symlnk this to the %s output path." % file_desc,
+                    part_of_all=part_of_all,
+                )
+                # Place libnode.version.so and libnode.x symlink in lib.target dir
+                installable_deps.append(self.GetSharedObjectFromSidedeck(install_path))
+                installable_deps.append(
+                    self.GetUnversionedSidedeckFromSidedeck(install_path)
+                )
             if self.output != self.alias and self.alias != self.target:
                 self.WriteMakeRule(
                     [self.alias],
@@ -1951,7 +2029,18 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
                     comment="Short alias for building this %s." % file_desc,
                     phony=True,
                 )
-            if part_of_all:
+            if self.flavor == "zos" and self.type == "shared_library":
+                # Make sure that .x symlink target is run
+                self.WriteMakeRule(
+                    ["all"],
+                    [
+                        self.GetUnversionedSidedeckFromSidedeck(install_path),
+                        self.GetSharedObjectFromSidedeck(install_path),
+                    ],
+                    comment='Add %s to "all" target.' % file_desc,
+                    phony=True,
+                )
+            elif part_of_all:
                 self.WriteMakeRule(
                     ["all"],
                     [install_path],
@@ -2247,6 +2336,9 @@ $(obj).$(TOOLSET)/$(TARGET)/%%.o: $(obj)/%%%s FORCE_DO_CMD
         #    # Install all shared libs into a common directory (per toolset) for
         #    # convenient access with LD_LIBRARY_PATH.
         #    return "$(builddir)/lib.%s/%s" % (self.toolset, self.alias)
+        if self.flavor == "zos" and self.type == "shared_library":
+            return "$(builddir)/lib.%s/%s" % (self.toolset, self.alias)
+
         return "$(builddir)/" + self.alias
 
 
@@ -2410,6 +2502,16 @@ def GenerateOutput(target_list, target_dicts, data, params):
             {
                 "copy_archive_args": copy_archive_arguments,
                 "link_commands": LINK_COMMANDS_AIX,
+                "flock": "./gyp-flock-tool flock",
+                "flock_index": 2,
+            }
+        )
+    elif flavor == "os400":
+        copy_archive_arguments = "-pPRf"
+        header_params.update(
+            {
+                "copy_archive_args": copy_archive_arguments,
+                "link_commands": LINK_COMMANDS_OS400,
                 "flock": "./gyp-flock-tool flock",
                 "flock_index": 2,
             }

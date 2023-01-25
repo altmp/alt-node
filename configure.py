@@ -45,7 +45,7 @@ from utils import SearchFiles
 parser = argparse.ArgumentParser()
 
 valid_os = ('win', 'mac', 'solaris', 'freebsd', 'openbsd', 'linux',
-            'android', 'aix', 'cloudabi')
+            'android', 'aix', 'cloudabi', 'ios')
 valid_arch = ('arm', 'arm64', 'ia32', 'mips', 'mipsel', 'mips64el', 'ppc',
               'ppc64', 'x64', 'x86', 'x86_64', 's390x', 'riscv64', 'loong64')
 valid_arm_float_abi = ('soft', 'softfp', 'hard')
@@ -56,6 +56,11 @@ valid_mips_float_abi = ('soft', 'hard')
 valid_intl_modes = ('none', 'small-icu', 'full-icu', 'system-icu')
 with open ('tools/icu/icu_versions.json') as f:
   icu_versions = json.load(f)
+
+shareable_builtins = {'cjs_module_lexer/lexer': 'deps/cjs-module-lexer/lexer.js',
+                     'cjs_module_lexer/dist/lexer': 'deps/cjs-module-lexer/dist/lexer.js',
+                     'undici/undici': 'deps/undici/undici.js'
+}
 
 # create option groups
 shared_optgroup = parser.add_argument_group("Shared libraries",
@@ -70,6 +75,9 @@ intl_optgroup = parser.add_argument_group("Internationalization",
     "library you want to build against.")
 http2_optgroup = parser.add_argument_group("HTTP2",
     "Flags that allows you to control HTTP2 features in Node.js")
+shared_builtin_optgroup = parser.add_argument_group("Shared builtins",
+    "Flags that allows you to control whether you want to build against "
+    "internal builtins or shared files.")
 
 # Options should be in alphabetical order but keep --prefix at the top,
 # that's arguably the one people will be looking for most.
@@ -152,6 +160,13 @@ parser.add_argument("--partly-static",
     help="Generate an executable with libgcc and libstdc++ libraries. This "
          "will not work on OSX when using the default compilation environment")
 
+parser.add_argument("--enable-vtune-profiling",
+    action="store_true",
+    dest="enable_vtune_profiling",
+    help="Enable profiling support for Intel VTune profiler to profile "
+         "JavaScript code executed in Node.js. This feature is only available "
+         "for x32, x86, and x64 architectures.")
+
 parser.add_argument("--enable-pgo-generate",
     action="store_true",
     dest="enable_pgo_generate",
@@ -180,6 +195,12 @@ parser.add_argument("--link-module",
          "This module will be referenced by path without extension; "
          "e.g. /root/x/y.js will be referenced via require('root/x/y'). "
          "Can be used multiple times")
+
+parser.add_argument("--openssl-conf-name",
+    action="store",
+    dest="openssl_conf_name",
+    default='nodejs_conf',
+    help="The OpenSSL config appname (config section name) used by Node.js")
 
 parser.add_argument('--openssl-default-cipher-list',
     action='store',
@@ -415,6 +436,16 @@ shared_optgroup.add_argument('--shared-cares-libpath',
     help='a directory to search for the shared cares DLL')
 
 parser.add_argument_group(shared_optgroup)
+
+for builtin in shareable_builtins:
+  builtin_id = 'shared_builtin_' + builtin + '_path'
+  shared_builtin_optgroup.add_argument('--shared-builtin-' + builtin + '-path',
+    action='store',
+    dest='node_shared_builtin_' + builtin.replace('/', '_') + '_path',
+    help='Path to shared file for ' + builtin + ' builtin. '
+         'Will be used instead of bundled version at runtime')
+
+parser.add_argument_group(shared_builtin_optgroup)
 
 static_optgroup.add_argument('--static-zoslib-gyp',
     action='store',
@@ -713,7 +744,8 @@ parser.add_argument('--no-browser-globals',
     dest='no_browser_globals',
     default=None,
     help='do not export browser globals like setTimeout, console, etc. ' +
-         '(This mode is not officially supported for regular applications)')
+         '(This mode is deprecated and not officially supported for regular ' +
+         'applications)')
 
 parser.add_argument('--without-inspector',
     action='store_true',
@@ -726,6 +758,14 @@ parser.add_argument('--shared',
     dest='shared',
     default=None,
     help='compile shared library for embedding node in another project. ' +
+         '(This mode is not officially supported for regular applications)')
+
+parser.add_argument('--libdir',
+    action='store',
+    dest='libdir',
+    default='lib',
+    help='a directory to install the shared library into relative to the '
+         'prefix. This is a no-op if --shared is not specified. ' +
          '(This mode is not officially supported for regular applications)')
 
 parser.add_argument('--without-v8-platform',
@@ -772,7 +812,13 @@ parser.add_argument('--v8-enable-object-print',
     action='store_true',
     dest='v8_enable_object_print',
     default=True,
-    help='compile V8 with auxiliar functions for native debuggers')
+    help='compile V8 with auxiliary functions for native debuggers')
+
+parser.add_argument('--v8-disable-object-print',
+    action='store_true',
+    dest='v8_disable_object_print',
+    default=False,
+    help='disable the V8 auxiliary functions for native debuggers')
 
 parser.add_argument('--v8-enable-hugepage',
     action='store_true',
@@ -781,11 +827,31 @@ parser.add_argument('--v8-enable-hugepage',
     help='Enable V8 transparent hugepage support. This feature is only '+
          'available on Linux platform.')
 
+parser.add_argument('--v8-enable-short-builtin-calls',
+    action='store_true',
+    dest='v8_enable_short_builtin_calls',
+    default=None,
+    help='Enable V8 short builtin calls support. This feature is enabled '+
+         'on x86_64 platform by default.')
+
+parser.add_argument('--v8-enable-snapshot-compression',
+    action='store_true',
+    dest='v8_enable_snapshot_compression',
+    default=None,
+    help='Enable the built-in snapshot compression in V8.')
+
 parser.add_argument('--node-builtin-modules-path',
     action='store',
     dest='node_builtin_modules_path',
     default=False,
     help='node will load builtin modules from disk instead of from binary')
+
+parser.add_argument('--node-snapshot-main',
+    action='store',
+    dest='node_snapshot_main',
+    default=None,
+    help='Run a file when building the embedded snapshot. Currently ' +
+         'experimental.')
 
 # Create compile_commands.json in out/Debug and out/Release.
 parser.add_argument('-C',
@@ -1114,6 +1180,7 @@ def host_arch_win():
     'x86'    : 'ia32',
     'arm'    : 'arm',
     'mips'   : 'mips',
+    'ARM64'  : 'arm64'
   }
 
   return matchup.get(arch, 'ia32')
@@ -1215,13 +1282,30 @@ def configure_node(o):
 
   o['variables']['want_separate_host_toolset'] = int(cross_compiling)
 
+  # Enable branch protection for arm64
+  if target_arch == 'arm64':
+    o['cflags']+=['-msign-return-address=all']
+    o['variables']['arm_fpu'] = options.arm_fpu or 'neon'
+
+  if options.node_snapshot_main is not None:
+    if options.shared:
+      # This should be possible to fix, but we will need to refactor the
+      # libnode target to avoid building it twice.
+      error('--node-snapshot-main is incompatible with --shared')
+    if options.without_node_snapshot:
+      error('--node-snapshot-main is incompatible with ' +
+            '--without-node-snapshot')
+    if cross_compiling:
+      error('--node-snapshot-main is incompatible with cross compilation')
+    o['variables']['node_snapshot_main'] = options.node_snapshot_main
+
   if options.without_node_snapshot or options.node_builtin_modules_path:
     o['variables']['node_use_node_snapshot'] = 'false'
   else:
     o['variables']['node_use_node_snapshot'] = b(
       not cross_compiling and not options.shared)
 
-  if options.without_node_code_cache or options.node_builtin_modules_path:
+  if options.without_node_code_cache or options.without_node_snapshot or options.node_builtin_modules_path:
     o['variables']['node_use_node_code_cache'] = 'false'
   else:
     # TODO(refack): fix this when implementing embedded code-cache when cross-compiling.
@@ -1237,6 +1321,15 @@ def configure_node(o):
 
   if flavor == 'aix':
     o['variables']['node_target_type'] = 'static_library'
+
+  if target_arch in ('x86', 'x64', 'ia32', 'x32'):
+    o['variables']['node_enable_v8_vtunejit'] = b(options.enable_vtune_profiling)
+  elif options.enable_vtune_profiling:
+    raise Exception(
+       'The VTune profiler for JavaScript is only supported on x32, x86, and x64 '
+       'architectures.')
+  else:
+    o['variables']['node_enable_v8_vtunejit'] = 'false'
 
   if flavor != 'linux' and (options.enable_pgo_generate or options.enable_pgo_use):
     raise Exception(
@@ -1338,6 +1431,7 @@ def configure_node(o):
   o['variables']['node_no_browser_globals'] = b(options.no_browser_globals)
 
   o['variables']['node_shared'] = b(options.shared)
+  o['variables']['libdir'] = options.libdir
   node_module_version = getmoduleversion.get_version()
 
   if options.dest_os == 'android':
@@ -1418,17 +1512,19 @@ def configure_library(lib, output, pkgname=None):
 
 def configure_v8(o):
   o['variables']['v8_enable_webassembly'] = 1
+  o['variables']['v8_enable_javascript_promise_hooks'] = 1
   o['variables']['v8_enable_lite_mode'] = 1 if options.v8_lite_mode else 0
   o['variables']['v8_enable_gdbjit'] = 1 if options.gdb else 0
   o['variables']['v8_no_strict_aliasing'] = 1  # Work around compiler bugs.
   o['variables']['v8_optimized_debug'] = 0 if options.v8_non_optimized_debug else 1
   o['variables']['dcheck_always_on'] = 1 if options.v8_with_dchecks else 0
-  o['variables']['v8_enable_object_print'] = 1 if options.v8_enable_object_print else 0
+  o['variables']['v8_enable_object_print'] = 0 if options.v8_disable_object_print else 1
   o['variables']['v8_random_seed'] = 0  # Use a random seed for hash tables.
   o['variables']['v8_promise_internal_field_count'] = 1 # Add internal field to promises for async hooks.
   o['variables']['v8_use_siphash'] = 0 if options.without_siphash else 1
   o['variables']['v8_enable_pointer_compression'] = 1 if options.enable_pointer_compression else 0
   o['variables']['v8_enable_31bit_smis_on_64bit_arch'] = 1 if options.enable_pointer_compression else 0
+  o['variables']['v8_enable_shared_ro_heap'] = 0 if options.enable_pointer_compression else 1
   o['variables']['v8_trace_maps'] = 1 if options.trace_maps else 0
   o['variables']['node_use_v8_platform'] = b(not options.without_v8_platform)
   o['variables']['node_use_bundled_v8'] = b(not options.without_bundled_v8)
@@ -1443,6 +1539,14 @@ def configure_v8(o):
   if flavor != 'linux' and options.v8_enable_hugepage:
     raise Exception('--v8-enable-hugepage is supported only on linux.')
   o['variables']['v8_enable_hugepage'] = 1 if options.v8_enable_hugepage else 0
+  if options.v8_enable_short_builtin_calls or o['variables']['target_arch'] == 'x64':
+    o['variables']['v8_enable_short_builtin_calls'] = 1
+  if options.v8_enable_snapshot_compression:
+    o['variables']['v8_enable_snapshot_compression'] = 1
+  if options.v8_enable_object_print and options.v8_disable_object_print:
+    raise Exception(
+        'Only one of the --v8-enable-object-print or --v8-disable-object-print options '
+        'can be specified at a time.')
 
 def configure_openssl(o):
   variables = o['variables']
@@ -1455,6 +1559,8 @@ def configure_openssl(o):
 
   if options.openssl_no_asm:
     variables['openssl_no_asm'] = 1
+
+  o['defines'] += ['NODE_OPENSSL_CONF_NAME=' + options.openssl_conf_name]
 
   if options.without_ssl:
     def without_ssl_error(option):
@@ -1504,8 +1610,10 @@ def configure_openssl(o):
   if options.openssl_no_asm and options.shared_openssl:
     error('--openssl-no-asm is incompatible with --shared-openssl')
 
-  if options.openssl_is_fips and not options.shared_openssl:
+  if options.openssl_is_fips:
     o['defines'] += ['OPENSSL_FIPS']
+
+  if options.openssl_is_fips and not options.shared_openssl:
     variables['node_fipsinstall'] = b(True)
 
   if options.shared_openssl:
@@ -1603,7 +1711,7 @@ def configure_intl(o):
 
   # write an empty file to start with
   write(icu_config_name, do_not_edit +
-        pprint.pformat(icu_config, indent=2) + '\n')
+        pprint.pformat(icu_config, indent=2, width=1024) + '\n')
 
   # always set icu_small, node.gyp depends on it being defined.
   o['variables']['icu_small'] = b(False)
@@ -1630,7 +1738,7 @@ def configure_intl(o):
     o['variables']['icu_small'] = b(True)
     locs = set(options.with_icu_locales.split(','))
     locs.add('root')  # must have root
-    o['variables']['icu_locales'] = ','.join(str(loc) for loc in locs)
+    o['variables']['icu_locales'] = ','.join(str(loc) for loc in sorted(locs))
     # We will check a bit later if we can use the canned deps/icu-small
     o['variables']['icu_default_data'] = options.with_icu_default_data_dir or ''
   elif with_intl == 'full-icu':
@@ -1855,7 +1963,7 @@ def configure_intl(o):
 
   # write updated icu_config.gypi with a bunch of paths
   write(icu_config_name, do_not_edit +
-        pprint.pformat(icu_config, indent=2) + '\n')
+        pprint.pformat(icu_config, indent=2, width=1024) + '\n')
   return  # end of configure_intl
 
 def configure_inspector(o):
@@ -1958,6 +2066,19 @@ configure_static(output)
 configure_inspector(output)
 configure_section_file(output)
 
+# configure shareable builtins
+output['variables']['node_builtin_shareable_builtins'] = []
+for builtin in shareable_builtins:
+  builtin_id = 'node_shared_builtin_' + builtin.replace('/', '_') + '_path'
+  if getattr(options, builtin_id):
+    if options.with_intl == 'none':
+      option_name = '--shared-builtin-' + builtin + '-path'
+      error(option_name + ' is incompatible with --with-intl=none' )
+    else:
+      output['defines'] += [builtin_id.upper() + '=' + getattr(options, builtin_id)]
+  else:
+    output['variables']['node_builtin_shareable_builtins'] += [shareable_builtins[builtin]]
+
 # Forward OSS-Fuzz settings
 output['variables']['ossfuzz'] = b(options.ossfuzz)
 
@@ -1984,7 +2105,7 @@ if make_global_settings:
 print_verbose(output)
 
 write('config.gypi', do_not_edit +
-      pprint.pformat(output, indent=2) + '\n')
+      pprint.pformat(output, indent=2, width=1024) + '\n')
 
 write('config.status', '#!/bin/sh\nset -x\nexec ./configure ' +
       ' '.join([pipes.quote(arg) for arg in original_argv]) + '\n')
@@ -2028,7 +2149,7 @@ gyp_args = ['--no-parallel', '-Dconfiguring_node=1']
 gyp_args += ['-Dbuild_type=' + config['BUILDTYPE']]
 
 if options.use_ninja:
-  gyp_args += ['-f', 'ninja']
+  gyp_args += ['-f', 'ninja-' + flavor]
 elif flavor == 'win' and sys.platform != 'msys':
   gyp_args += ['-f', 'msvs', '-G', 'msvs_version=auto']
 else:

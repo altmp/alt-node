@@ -5,7 +5,6 @@ if (!common.hasCrypto)
   common.skip('missing crypto');
 
 const assert = require('assert');
-const { types: { isKeyObject } } = require('util');
 const {
   createCipheriv,
   createDecipheriv,
@@ -23,7 +22,6 @@ const {
   getCurves,
   generateKeySync,
   generateKeyPairSync,
-  webcrypto,
 } = require('crypto');
 
 const fixtures = require('../common/fixtures');
@@ -34,18 +32,6 @@ const privatePem = fixtures.readKey('rsa_private.pem', 'ascii');
 const publicDsa = fixtures.readKey('dsa_public_1025.pem', 'ascii');
 const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem',
                                     'ascii');
-
-{
-  // Attempting to create an empty key should throw.
-  assert.throws(() => {
-    createSecretKey(Buffer.alloc(0));
-  }, {
-    name: 'RangeError',
-    code: 'ERR_OUT_OF_RANGE',
-    message: 'The value of "key.byteLength" is out of range. ' +
-             'It must be > 0. Received 0'
-  });
-}
 
 {
   // Attempting to create a key of a wrong type should throw
@@ -546,9 +532,7 @@ const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem',
     format: 'pem',
     passphrase: Buffer.alloc(1024, 'a')
   }), {
-    message: common.hasOpenSSL3 ?
-      'error:07880109:common libcrypto routines::interrupted or cancelled' :
-      /bad decrypt/
+    message: /bad decrypt/
   });
 
   const publicKey = createPublicKey(publicDsa);
@@ -828,27 +812,6 @@ const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem',
 }
 
 {
-  const buffer = Buffer.from('Hello World');
-  const keyObject = createSecretKey(buffer);
-  const keyPair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  assert(isKeyObject(keyPair.publicKey));
-  assert(isKeyObject(keyPair.privateKey));
-  assert(isKeyObject(keyObject));
-
-  assert(!isKeyObject(buffer));
-
-  webcrypto.subtle.importKey(
-    'node.keyObject',
-    keyPair.publicKey,
-    { name: 'ECDH', namedCurve: 'P-256' },
-    false,
-    [],
-  ).then((cryptoKey) => {
-    assert(!isKeyObject(cryptoKey));
-  });
-}
-
-{
   const first = Buffer.from('Hello');
   const second = Buffer.from('World');
   const keyObject = createSecretKey(first);
@@ -894,4 +857,26 @@ const privateDsa = fixtures.readKey('dsa_private_encrypted_1025.pem',
   assert(!first.publicKey.equals(second.privateKey));
   assert(!first.privateKey.equals(second.privateKey));
   assert(!first.privateKey.equals(second.publicKey));
+}
+
+{
+  const first = createSecretKey(Buffer.alloc(0));
+  const second = createSecretKey(new ArrayBuffer(0));
+  const third = createSecretKey(Buffer.alloc(1));
+  assert(first.equals(first));
+  assert(first.equals(second));
+  assert(!first.equals(third));
+  assert(!third.equals(first));
+}
+
+{
+  // This should not cause a crash: https://github.com/nodejs/node/issues/44471
+  for (const key of ['', 'foo', null, undefined, true, Boolean]) {
+    assert.throws(() => {
+      createPublicKey({ key, format: 'jwk' });
+    }, { code: 'ERR_INVALID_ARG_TYPE', message: /The "key\.key" property must be of type object/ });
+    assert.throws(() => {
+      createPrivateKey({ key, format: 'jwk' });
+    }, { code: 'ERR_INVALID_ARG_TYPE', message: /The "key\.key" property must be of type object/ });
+  }
 }

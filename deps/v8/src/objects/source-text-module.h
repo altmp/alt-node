@@ -17,6 +17,7 @@ namespace v8 {
 namespace internal {
 
 class UnorderedModuleSet;
+class StructBodyDescriptor;
 
 #include "torque-generated/src/objects/source-text-module-tq.inc"
 
@@ -53,9 +54,10 @@ class SourceTextModule
   static int ExportIndex(int cell_index);
 
   // Used by builtins to fulfill or reject the promise associated
-  // with async SourceTextModules.
-  static void AsyncModuleExecutionFulfilled(Isolate* isolate,
-                                            Handle<SourceTextModule> module);
+  // with async SourceTextModules. Return Nothing if the execution is
+  // terminated.
+  static Maybe<bool> AsyncModuleExecutionFulfilled(
+      Isolate* isolate, Handle<SourceTextModule> module);
   static void AsyncModuleExecutionRejected(Isolate* isolate,
                                            Handle<SourceTextModule> module,
                                            Handle<Object> exception);
@@ -178,10 +180,6 @@ class SourceTextModule
                                            AsyncParentCompletionSet* exec_list);
 
   // Implementation of spec concrete method Evaluate.
-  static V8_WARN_UNUSED_RESULT MaybeHandle<Object> EvaluateMaybeAsync(
-      Isolate* isolate, Handle<SourceTextModule> module);
-
-  // Continued implementation of spec concrete method Evaluate.
   static V8_WARN_UNUSED_RESULT MaybeHandle<Object> Evaluate(
       Isolate* isolate, Handle<SourceTextModule> module);
 
@@ -204,9 +202,10 @@ class SourceTextModule
   static V8_WARN_UNUSED_RESULT MaybeHandle<Object> ExecuteModule(
       Isolate* isolate, Handle<SourceTextModule> module);
 
-  // Implementation of spec ExecuteAsyncModule.
-  static void ExecuteAsyncModule(Isolate* isolate,
-                                 Handle<SourceTextModule> module);
+  // Implementation of spec ExecuteAsyncModule. Return Nothing if the execution
+  // is been terminated.
+  static V8_WARN_UNUSED_RESULT Maybe<bool> ExecuteAsyncModule(
+      Isolate* isolate, Handle<SourceTextModule> module);
 
   static void Reset(Isolate* isolate, Handle<SourceTextModule> module);
 
@@ -276,6 +275,8 @@ class ModuleRequest
   // a single assertion.
   static const size_t kAssertionEntrySize = 3;
 
+  using BodyDescriptor = StructBodyDescriptor;
+
   TQ_OBJECT_CONSTRUCTORS(ModuleRequest)
 };
 
@@ -291,6 +292,8 @@ class SourceTextModuleInfoEntry
       Handle<PrimitiveHeapObject> local_name,
       Handle<PrimitiveHeapObject> import_name, int module_request,
       int cell_index, int beg_pos, int end_pos);
+
+  using BodyDescriptor = StructBodyDescriptor;
 
   TQ_OBJECT_CONSTRUCTORS(SourceTextModuleInfoEntry)
 };

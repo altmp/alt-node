@@ -260,12 +260,8 @@ static size_t hex_decode(char* buf,
   return i;
 }
 
-size_t StringBytes::WriteUCS2(Isolate* isolate,
-                              char* buf,
-                              size_t buflen,
-                              Local<String> str,
-                              int flags,
-                              size_t* chars_written) {
+size_t StringBytes::WriteUCS2(
+    Isolate* isolate, char* buf, size_t buflen, Local<String> str, int flags) {
   uint16_t* const dst = reinterpret_cast<uint16_t*>(buf);
 
   size_t max_chars = buflen / sizeof(*dst);
@@ -277,7 +273,6 @@ size_t StringBytes::WriteUCS2(Isolate* isolate,
   size_t nchars;
   if (aligned_dst == dst) {
     nchars = str->Write(isolate, dst, 0, max_chars, flags);
-    *chars_written = nchars;
     return nchars * sizeof(*dst);
   }
 
@@ -285,7 +280,9 @@ size_t StringBytes::WriteUCS2(Isolate* isolate,
 
   // Write all but the last char
   max_chars = std::min(max_chars, static_cast<size_t>(str->Length()));
-  if (max_chars == 0) return 0;
+  if (max_chars == 0) {
+    return 0;
+  }
   nchars = str->Write(isolate, aligned_dst, 0, max_chars - 1, flags);
   CHECK_EQ(nchars, max_chars - 1);
 
@@ -298,23 +295,16 @@ size_t StringBytes::WriteUCS2(Isolate* isolate,
   memcpy(buf + nchars * sizeof(*dst), &last, sizeof(last));
   nchars++;
 
-  *chars_written = nchars;
   return nchars * sizeof(*dst);
 }
-
 
 size_t StringBytes::Write(Isolate* isolate,
                           char* buf,
                           size_t buflen,
                           Local<Value> val,
-                          enum encoding encoding,
-                          int* chars_written) {
+                          enum encoding encoding) {
   HandleScope scope(isolate);
   size_t nbytes;
-  int nchars;
-
-  if (chars_written == nullptr)
-    chars_written = &nchars;
 
   CHECK(val->IsString() == true);
   Local<String> str = val.As<String>();
@@ -334,19 +324,15 @@ size_t StringBytes::Write(Isolate* isolate,
         uint8_t* const dst = reinterpret_cast<uint8_t*>(buf);
         nbytes = str->WriteOneByte(isolate, dst, 0, buflen, flags);
       }
-      *chars_written = nbytes;
       break;
 
     case BUFFER:
     case UTF8:
-      nbytes = str->WriteUtf8(isolate, buf, buflen, chars_written, flags);
+      nbytes = str->WriteUtf8(isolate, buf, buflen, nullptr, flags);
       break;
 
     case UCS2: {
-      size_t nchars;
-
-      nbytes = WriteUCS2(isolate, buf, buflen, str, flags, &nchars);
-      *chars_written = static_cast<int>(nchars);
+      nbytes = WriteUCS2(isolate, buf, buflen, str, flags);
 
       // Node's "ucs2" encoding wants LE character data stored in
       // the Buffer, so we need to reorder on BE platforms.  See
@@ -368,7 +354,6 @@ size_t StringBytes::Write(Isolate* isolate,
         String::Value value(isolate, str);
         nbytes = base64_decode(buf, buflen, *value, value.length());
       }
-      *chars_written = nbytes;
       break;
 
     case HEX:
@@ -379,7 +364,6 @@ size_t StringBytes::Write(Isolate* isolate,
         String::Value value(isolate, str);
         nbytes = hex_decode(buf, buflen, *value, value.length());
       }
-      *chars_written = nbytes;
       break;
 
     default:
@@ -389,7 +373,6 @@ size_t StringBytes::Write(Isolate* isolate,
 
   return nbytes;
 }
-
 
 // Quick and dirty size calculation
 // Will always be at least big enough, but may have some extra
@@ -642,10 +625,6 @@ MaybeLocal<Value> StringBytes::Encode(Isolate* isolate,
   switch (encoding) {
     case BUFFER:
       {
-        if (buflen > node::Buffer::kMaxLength) {
-          *error = node::ERR_BUFFER_TOO_LARGE(isolate);
-          return MaybeLocal<Value>();
-        }
         auto maybe_buf = Buffer::Copy(isolate, buf, buflen);
         Local<v8::Object> buf;
         if (!maybe_buf.ToLocal(&buf)) {
@@ -725,20 +704,21 @@ MaybeLocal<Value> StringBytes::Encode(Isolate* isolate,
     }
 
     case UCS2: {
+      size_t str_len = buflen / 2;
       if (IsBigEndian()) {
-        uint16_t* dst = node::UncheckedMalloc<uint16_t>(buflen / 2);
-        if (dst == nullptr) {
+        uint16_t* dst = node::UncheckedMalloc<uint16_t>(str_len);
+        if (str_len != 0 && dst == nullptr) {
           *error = node::ERR_MEMORY_ALLOCATION_FAILED(isolate);
           return MaybeLocal<Value>();
         }
-        for (size_t i = 0, k = 0; k < buflen / 2; i += 2, k += 1) {
+        for (size_t i = 0, k = 0; k < str_len; i += 2, k += 1) {
           // The input is in *little endian*, because that's what Node.js
           // expects, so the high byte comes after the low byte.
           const uint8_t hi = static_cast<uint8_t>(buf[i + 1]);
           const uint8_t lo = static_cast<uint8_t>(buf[i + 0]);
           dst[k] = static_cast<uint16_t>(hi) << 8 | lo;
         }
-        return ExternTwoByteString::New(isolate, dst, buflen / 2, error);
+        return ExternTwoByteString::New(isolate, dst, str_len, error);
       }
       if (reinterpret_cast<uintptr_t>(buf) % 2 != 0) {
         // Unaligned data still means we can't directly pass it to V8.
@@ -749,10 +729,10 @@ MaybeLocal<Value> StringBytes::Encode(Isolate* isolate,
         }
         memcpy(dst, buf, buflen);
         return ExternTwoByteString::New(
-            isolate, reinterpret_cast<uint16_t*>(dst), buflen / 2, error);
+            isolate, reinterpret_cast<uint16_t*>(dst), str_len, error);
       }
       return ExternTwoByteString::NewFromCopy(
-          isolate, reinterpret_cast<const uint16_t*>(buf), buflen / 2, error);
+          isolate, reinterpret_cast<const uint16_t*>(buf), str_len, error);
     }
 
     default:
@@ -768,6 +748,7 @@ MaybeLocal<Value> StringBytes::Encode(Isolate* isolate,
                                       const uint16_t* buf,
                                       size_t buflen,
                                       Local<Value>* error) {
+  if (buflen == 0) return String::Empty(isolate);
   CHECK_BUFLEN_IN_RANGE(buflen);
 
   // Node's "ucs2" encoding expects LE character data inside a

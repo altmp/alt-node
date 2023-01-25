@@ -24,12 +24,12 @@
 const process = global.process;  // Some tests tamper with the process global.
 
 const assert = require('assert');
-const { exec, execSync, spawnSync } = require('child_process');
+const { exec, execSync, spawn, spawnSync } = require('child_process');
 const fs = require('fs');
 // Do not require 'os' until needed so that test-os-checked-function can
 // monkey patch it. If 'os' is required here, that test will fail.
 const path = require('path');
-const util = require('util');
+const { inspect } = require('util');
 const { isMainThread } = require('worker_threads');
 
 const tmpdir = require('./tmpdir');
@@ -39,7 +39,7 @@ const hasIntl = !!process.config.variables.v8_enable_i18n_support;
 
 const {
   atob,
-  btoa
+  btoa,
 } = require('buffer');
 
 // Some tests assume a umask of 0o022 so set that up front. Tests that need a
@@ -97,8 +97,8 @@ if (process.argv.length === 2 &&
           (process.features.inspector || !flag.startsWith('--inspect'))) {
         console.log(
           'NOTE: The test started as a child_process using these flags:',
-          util.inspect(flags),
-          'Use NODE_SKIP_FLAG_CHECK to run the test with the original flags.'
+          inspect(flags),
+          'Use NODE_SKIP_FLAG_CHECK to run the test with the original flags.',
         );
         const args = [...flags, ...process.execArgv, ...process.argv.slice(1)];
         const options = { encoding: 'utf8', stdio: 'inherit' };
@@ -120,6 +120,19 @@ const isFreeBSD = process.platform === 'freebsd';
 const isOpenBSD = process.platform === 'openbsd';
 const isLinux = process.platform === 'linux';
 const isOSX = process.platform === 'darwin';
+const isPi = (() => {
+  try {
+    // Normal Raspberry Pi detection is to find the `Raspberry Pi` string in
+    // the contents of `/sys/firmware/devicetree/base/model` but that doesn't
+    // work inside a container. Match the chipset model number instead.
+    const cpuinfo = fs.readFileSync('/proc/cpuinfo', { encoding: 'utf8' });
+    const ok = /^Hardware\s*:\s*(.*)$/im.exec(cpuinfo)?.[1] === 'BCM2835';
+    /^/.test('');  // Clear RegExp.$_, some tests expect it to be empty.
+    return ok;
+  } catch {
+    return false;
+  }
+})();
 
 const isDumbTerminal = process.env.TERM === 'dumb';
 
@@ -138,7 +151,7 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
   process.on('exit', () => {
     // Iterate through handles to make sure nothing crashes
     for (const k in initHandles)
-      util.inspect(initHandles[k]);
+      inspect(initHandles[k]);
   });
 
   const _queueDestroyAsyncId = async_wrap.queueDestroyAsyncId;
@@ -148,7 +161,7 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
       process._rawDebug();
       throw new Error(`same id added to destroy list twice (${id})`);
     }
-    destroyListList[id] = util.inspect(new Error());
+    destroyListList[id] = inspect(new Error());
     _queueDestroyAsyncId(id);
   };
 
@@ -162,7 +175,7 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
       }
       initHandles[id] = {
         resource,
-        stack: util.inspect(new Error()).substr(6)
+        stack: inspect(new Error()).substr(6),
       };
     },
     before() { },
@@ -173,7 +186,7 @@ if (process.env.NODE_TEST_WITH_ASYNC_HOOKS) {
         process._rawDebug();
         throw new Error(`destroy called for same id (${id})`);
       }
-      destroydIdsList[id] = util.inspect(new Error());
+      destroydIdsList[id] = inspect(new Error());
     },
   }).enable();
 }
@@ -246,15 +259,10 @@ function platformTimeout(ms) {
   if (isAIX)
     return multipliers.two * ms; // Default localhost speed is slower on AIX
 
-  if (process.arch !== 'arm')
-    return ms;
+  if (isPi)
+    return multipliers.two * ms;  // Raspberry Pi devices
 
-  const armv = process.config.variables.arm_version;
-
-  if (armv === '7')
-    return multipliers.two * ms;  // ARMv7
-
-  return ms; // ARMv8+
+  return ms;
 }
 
 let knownGlobals = [
@@ -283,6 +291,9 @@ if (global.gc) {
   knownGlobals.push(global.gc);
 }
 
+if (global.Performance) {
+  knownGlobals.push(global.Performance);
+}
 if (global.performance) {
   knownGlobals.push(global.performance);
 }
@@ -301,19 +312,37 @@ if (global.structuredClone) {
 }
 
 if (global.fetch) {
-  knownGlobals.push(
-    global.fetch,
-    global.FormData,
-    global.Request,
-    global.Response,
-    global.Headers,
-  );
+  knownGlobals.push(fetch);
 }
 if (hasCrypto && global.crypto) {
   knownGlobals.push(global.crypto);
   knownGlobals.push(global.Crypto);
   knownGlobals.push(global.CryptoKey);
   knownGlobals.push(global.SubtleCrypto);
+}
+if (global.CustomEvent) {
+  knownGlobals.push(global.CustomEvent);
+}
+if (global.ReadableStream) {
+  knownGlobals.push(
+    global.ReadableStream,
+    global.ReadableStreamDefaultReader,
+    global.ReadableStreamBYOBReader,
+    global.ReadableStreamBYOBRequest,
+    global.ReadableByteStreamController,
+    global.ReadableStreamDefaultController,
+    global.TransformStream,
+    global.TransformStreamDefaultController,
+    global.WritableStream,
+    global.WritableStreamDefaultWriter,
+    global.WritableStreamDefaultController,
+    global.ByteLengthQueuingStrategy,
+    global.CountQueuingStrategy,
+    global.TextEncoderStream,
+    global.TextDecoderStream,
+    global.CompressionStream,
+    global.DecompressionStream,
+  );
 }
 
 function allowGlobals(...allowlist) {
@@ -403,8 +432,8 @@ function _mustCallInner(fn, criteria = 1, field) {
   const context = {
     [field]: criteria,
     actual: 0,
-    stack: util.inspect(new Error()),
-    name: fn.name || '<anonymous>'
+    stack: inspect(new Error()),
+    name: fn.name || '<anonymous>',
   };
 
   // Add the exit listener only once to avoid listener leak warnings
@@ -447,7 +476,7 @@ function hasMultiLocalhost() {
 
 function skipIfEslintMissing() {
   if (!fs.existsSync(
-    path.join(__dirname, '..', '..', 'tools', 'node_modules', 'eslint')
+    path.join(__dirname, '..', '..', 'tools', 'node_modules', 'eslint'),
   )) {
     skip('missing ESLint');
   }
@@ -491,11 +520,57 @@ function mustNotCall(msg) {
   const callSite = getCallSite(mustNotCall);
   return function mustNotCall(...args) {
     const argsInfo = args.length > 0 ?
-      `\ncalled with arguments: ${args.map(util.inspect).join(', ')}` : '';
+      `\ncalled with arguments: ${args.map((arg) => inspect(arg)).join(', ')}` : '';
     assert.fail(
       `${msg || 'function should not have been called'} at ${callSite}` +
       argsInfo);
   };
+}
+
+const _mustNotMutateObjectDeepProxies = new WeakMap();
+
+function mustNotMutateObjectDeep(original) {
+  // Return primitives and functions directly. Primitives are immutable, and
+  // proxied functions are impossible to compare against originals, e.g. with
+  // `assert.deepEqual()`.
+  if (original === null || typeof original !== 'object') {
+    return original;
+  }
+
+  const cachedProxy = _mustNotMutateObjectDeepProxies.get(original);
+  if (cachedProxy) {
+    return cachedProxy;
+  }
+
+  const _mustNotMutateObjectDeepHandler = {
+    __proto__: null,
+    defineProperty(target, property, descriptor) {
+      assert.fail(`Expected no side effects, got ${inspect(property)} ` +
+                  'defined');
+    },
+    deleteProperty(target, property) {
+      assert.fail(`Expected no side effects, got ${inspect(property)} ` +
+                  'deleted');
+    },
+    get(target, prop, receiver) {
+      return mustNotMutateObjectDeep(Reflect.get(target, prop, receiver));
+    },
+    preventExtensions(target) {
+      assert.fail('Expected no side effects, got extensions prevented on ' +
+                  inspect(target));
+    },
+    set(target, property, value, receiver) {
+      assert.fail(`Expected no side effects, got ${inspect(value)} ` +
+                  `assigned to ${inspect(property)}`);
+    },
+    setPrototypeOf(target, prototype) {
+      assert.fail(`Expected no side effects, got set prototype to ${prototype}`);
+    },
+  };
+
+  const proxy = new Proxy(original, _mustNotMutateObjectDeepHandler);
+  _mustNotMutateObjectDeepProxies.set(original, proxy);
+  return proxy;
 }
 
 function printSkipMessage(msg) {
@@ -593,7 +668,7 @@ function expectWarning(nameOrMap, expected, code) {
       if (!catchWarning[warning.name]) {
         throw new TypeError(
           `"${warning.name}" was triggered without being expected.\n` +
-          util.inspect(warning)
+          inspect(warning),
         );
       }
       catchWarning[warning.name](warning);
@@ -614,7 +689,7 @@ function expectsError(validator, exact) {
     if (args.length !== 1) {
       // Do not use `assert.strictEqual()` to prevent `inspect` from
       // always being called.
-      assert.fail(`Expected one argument, got ${util.inspect(args)}`);
+      assert.fail(`Expected one argument, got ${inspect(args)}`);
     }
     const error = args.pop();
     const descriptor = Object.getOwnPropertyDescriptor(error, 'message');
@@ -659,6 +734,8 @@ function getArrayBufferViews(buf) {
     Uint32Array,
     Float32Array,
     Float64Array,
+    BigInt64Array,
+    BigUint64Array,
     DataView,
   ];
 
@@ -714,14 +791,15 @@ function invalidArgTypeHelper(input) {
     return ` Received function ${input.name}`;
   }
   if (typeof input === 'object') {
-    if (input.constructor && input.constructor.name) {
+    if (input.constructor?.name) {
       return ` Received an instance of ${input.constructor.name}`;
     }
-    return ` Received ${util.inspect(input, { depth: -1 })}`;
+    return ` Received ${inspect(input, { depth: -1 })}`;
   }
-  let inspected = util.inspect(input, { colors: false });
-  if (inspected.length > 25)
-    inspected = `${inspected.slice(0, 25)}...`;
+
+  let inspected = inspect(input, { colors: false });
+  if (inspected.length > 28) { inspected = `${inspected.slice(inspected, 0, 25)}...`; }
+
   return ` Received type ${typeof input} (${inspected})`;
 }
 
@@ -769,6 +847,36 @@ function requireNoPackageJSONAbove(dir = __dirname) {
   }
 }
 
+function spawnPromisified(...args) {
+  let stderr = '';
+  let stdout = '';
+
+  const child = spawn(...args);
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (data) => { stderr += data; });
+  child.stdout.setEncoding('utf8');
+  child.stdout.on('data', (data) => { stdout += data; });
+
+  return new Promise((resolve, reject) => {
+    child.on('close', (code, signal) => {
+      resolve({
+        code,
+        signal,
+        stderr,
+        stdout,
+      });
+    });
+    child.on('error', (code, signal) => {
+      reject({
+        code,
+        signal,
+        stderr,
+        stdout,
+      });
+    });
+  });
+}
+
 const common = {
   allowGlobals,
   buildType,
@@ -796,12 +904,14 @@ const common = {
   isMainThread,
   isOpenBSD,
   isOSX,
+  isPi,
   isSunOS,
   isWindows,
   localIPv6Hosts,
   mustCall,
   mustCallAtLeast,
   mustNotCall,
+  mustNotMutateObjectDeep,
   mustSucceed,
   nodeProcessAborted,
   PIPE,
@@ -816,6 +926,7 @@ const common = {
   skipIfEslintMissing,
   skipIfInspectorDisabled,
   skipIfWorker,
+  spawnPromisified,
 
   get enoughTestMem() {
     return require('os').totalmem() > 0x70000000; /* 1.75 Gb */
@@ -921,5 +1032,5 @@ module.exports = new Proxy(common, {
     if (!validProperties.has(prop))
       throw new Error(`Using invalid common property: '${prop}'`);
     return obj[prop];
-  }
+  },
 });

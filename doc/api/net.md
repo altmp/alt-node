@@ -8,24 +8,24 @@
 
 <!-- source_link=lib/net.js -->
 
-The `net` module provides an asynchronous network API for creating stream-based
+The `node:net` module provides an asynchronous network API for creating stream-based
 TCP or [IPC][] servers ([`net.createServer()`][]) and clients
 ([`net.createConnection()`][]).
 
 It can be accessed using:
 
 ```js
-const net = require('net');
+const net = require('node:net');
 ```
 
 ## IPC support
 
-The `net` module supports IPC with named pipes on Windows, and Unix domain
+The `node:net` module supports IPC with named pipes on Windows, and Unix domain
 sockets on other operating systems.
 
 ### Identifying paths for IPC connections
 
-[`net.connect()`][], [`net.createConnection()`][], [`server.listen()`][] and
+[`net.connect()`][], [`net.createConnection()`][], [`server.listen()`][], and
 [`socket.connect()`][] take a `path` parameter to identify IPC endpoints.
 
 On Unix, the local domain is also known as the Unix domain. The path is a
@@ -281,10 +281,35 @@ added: v0.1.90
 
 Emitted when the server has been bound after calling [`server.listen()`][].
 
+### Event: `'drop'`
+
+<!-- YAML
+added: v18.6.0
+-->
+
+When the number of connections reaches the threshold of `server.maxConnections`,
+the server will drop new connections and emit `'drop'` event instead. If it is a
+TCP server, the argument is as follows, otherwise the argument is `undefined`.
+
+* `data` {Object} The argument passed to event listener.
+  * `localAddress` {string}  Local address.
+  * `localPort` {number} Local port.
+  * `localFamily` {string} Local family.
+  * `remoteAddress` {string} Remote address.
+  * `remotePort` {number} Remote port.
+  * `remoteFamily` {string} Remote IP family. `'IPv4'` or `'IPv6'`.
+
 ### `server.address()`
 
 <!-- YAML
 added: v0.1.90
+changes:
+  - version: v18.4.0
+    pr-url: https://github.com/nodejs/node/pull/43054
+    description: The `family` property now returns a string instead of a number.
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41431
+    description: The `family` property now returns a number instead of a string.
 -->
 
 * Returns: {Object|string|null}
@@ -382,7 +407,7 @@ after a certain amount of time:
 ```js
 server.on('error', (e) => {
   if (e.code === 'EADDRINUSE') {
-    console.log('Address in use, retrying...');
+    console.error('Address in use, retrying...');
     setTimeout(() => {
       server.close();
       server.listen(PORT, HOST);
@@ -460,7 +485,7 @@ shown below.
 server.listen({
   host: 'localhost',
   port: 80,
-  exclusive: true
+  exclusive: true,
 });
 ```
 
@@ -480,7 +505,7 @@ const controller = new AbortController();
 server.listen({
   host: 'localhost',
   port: 80,
-  signal: controller.signal
+  signal: controller.signal,
 });
 // Later, when you want to close the server.
 controller.abort();
@@ -710,7 +735,7 @@ Not applicable to Unix sockets.
 
 * `err` {Error|null} The error object. See [`dns.lookup()`][].
 * `address` {string} The IP address.
-* `family` {string|null} The address type. See [`dns.lookup()`][].
+* `family` {number|null} The address type. See [`dns.lookup()`][].
 * `host` {string} The host name.
 
 ### Event: `'ready'`
@@ -738,6 +763,13 @@ See also: [`socket.setTimeout()`][].
 
 <!-- YAML
 added: v0.1.90
+changes:
+  - version: v18.4.0
+    pr-url: https://github.com/nodejs/node/pull/43054
+    description: The `family` property now returns a string instead of a number.
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41431
+    description: The `family` property now returns a number instead of a string.
 -->
 
 * Returns: {Object}
@@ -822,6 +854,13 @@ behavior.
 <!-- YAML
 added: v0.1.90
 changes:
+  - version: v18.13.0
+    pr-url: https://github.com/nodejs/node/pull/44731
+    description: Added the `autoSelectFamily` option.
+  - version: v17.7.0
+    pr-url: https://github.com/nodejs/node/pull/41310
+    description: The `noDelay`, `keepAlive`, and `keepAliveInitialDelay`
+                 options are supported now.
   - version: v12.10.0
     pr-url: https://github.com/nodejs/node/pull/25436
     description: Added `onread` option.
@@ -862,6 +901,20 @@ For TCP connections, available `options` are:
   **Default:** `false`.
 * `keepAliveInitialDelay` {number} If set to a positive number, it sets the initial delay before
   the first keepalive probe is sent on an idle socket.**Default:** `0`.
+* `autoSelectFamily` {boolean}: If set to `true`, it enables a family autodetection algorithm
+  that loosely implements section 5 of [RFC 8305][].
+  The `all` option passed to lookup is set to `true` and the sockets attempts to connect to all
+  obtained IPv6 and IPv4 addresses, in sequence, until a connection is established.
+  The first returned AAAA address is tried first, then the first returned A address and so on.
+  Each connection attempt is given the amount of time specified by the `autoSelectFamilyAttemptTimeout`
+  option before timing out and trying the next address.
+  Ignored if the `family` option is not `0` or if `localAddress` is set.
+  Connection errors are not emitted if at least one connection succeeds.
+  **Default:** `false`.
+* `autoSelectFamilyAttemptTimeout` {number}: The amount of time in milliseconds to wait
+  for a connection attempt to finish before trying the next address when using the `autoSelectFamily` option.
+  If set to a positive integer less than `10`, then the value `10` will be used instead.
+  **Default:** `250`.
 
 For [IPC][] connections, available `options` are:
 
@@ -888,7 +941,7 @@ For both types, available `options` include:
 Following is an example of a client using the `onread` option:
 
 ```js
-const net = require('net');
+const net = require('node:net');
 net.connect({
   port: 80,
   onread: {
@@ -897,8 +950,8 @@ net.connect({
     callback: function(nread, buf) {
       // Received data is available in `buf` from 0 to `nread`.
       console.log(buf.toString('utf8', 0, nread));
-    }
-  }
+    },
+  },
 });
 ```
 
@@ -1010,6 +1063,16 @@ added: v0.9.6
 
 The numeric representation of the local port. For example, `80` or `21`.
 
+### `socket.localFamily`
+
+<!-- YAML
+added: v18.8.0
+-->
+
+* {string}
+
+The string representation of the local IP family. `'IPv4'` or `'IPv6'`.
+
 ### `socket.pause()`
 
 * Returns: {net.Socket} The socket itself.
@@ -1074,6 +1137,19 @@ added: v0.5.10
 * {integer}
 
 The numeric representation of the remote port. For example, `80` or `21`.
+
+### `socket.resetAndDestroy()`
+
+<!-- YAML
+added: v18.3.0
+-->
+
+* Returns: {net.Socket}
+
+Close the TCP connection by sending an RST packet and destroy the stream.
+If this TCP socket is in connecting status, it will send an RST packet and destroy this TCP socket once it is connected.
+Otherwise, it will call `socket.destroy` with an `ERR_SOCKET_CLOSED` Error.
+If this is not a TCP socket (for example, a pipe), calling this method will immediately throw an `ERR_INVALID_HANDLE_TYPE` Error.
 
 ### `socket.resume()`
 
@@ -1148,6 +1224,12 @@ algorithm.
 
 <!-- YAML
 added: v0.1.90
+changes:
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41678
+    description: Passing an invalid callback to the `callback` argument
+                 now throws `ERR_INVALID_ARG_TYPE` instead of
+                 `ERR_INVALID_CALLBACK`.
 -->
 
 * `timeout` {number}
@@ -1338,7 +1420,7 @@ Following is an example of a client of the echo server described
 in the [`net.createServer()`][] section:
 
 ```js
-const net = require('net');
+const net = require('node:net');
 const client = net.createConnection({ port: 8124 }, () => {
   // 'connect' listener.
   console.log('connected to server!');
@@ -1409,6 +1491,13 @@ then returns the `net.Socket` that starts the connection.
 
 <!-- YAML
 added: v0.5.0
+changes:
+  - version:
+    - v17.7.0
+    - v16.15.0
+    pr-url: https://github.com/nodejs/node/pull/41310
+    description: The `noDelay`, `keepAlive`, and `keepAliveInitialDelay`
+                 options are supported now.
 -->
 
 * `options` {Object}
@@ -1454,7 +1543,7 @@ Here is an example of a TCP echo server which listens for connections
 on port 8124:
 
 ```js
-const net = require('net');
+const net = require('node:net');
 const server = net.createServer((c) => {
   // 'connection' listener.
   console.log('client connected');
@@ -1550,6 +1639,7 @@ net.isIPv6('fhqwhgads'); // returns false
 
 [IPC]: #ipc-support
 [Identifying paths for IPC connections]: #identifying-paths-for-ipc-connections
+[RFC 8305]: https://www.rfc-editor.org/rfc/rfc8305.txt
 [Readable Stream]: stream.md#class-streamreadable
 [`'close'`]: #event-close
 [`'connect'`]: #event-connect

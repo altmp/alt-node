@@ -57,7 +57,7 @@ set "need_path_ext="
 exit /b 0
 
 :check-python
-%* -V
+%1 -V
 :: 9009 means error file not found
 if %errorlevel% equ 9009 (
   echo Not an executable Python program

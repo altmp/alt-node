@@ -853,16 +853,16 @@ const parseTests = {
   'http://a\r" \t\n<\'b:b@c\r\nd/e?f': {
     protocol: 'http:',
     slashes: true,
-    auth: 'a\r" \t\n<\'b:b',
-    host: 'c',
+    auth: 'a" <\'b:b',
+    host: 'cd',
     port: null,
-    hostname: 'c',
+    hostname: 'cd',
     hash: null,
     search: '?f',
     query: 'f',
-    pathname: '%0D%0Ad/e',
-    path: '%0D%0Ad/e?f',
-    href: 'http://a%0D%22%20%09%0A%3C\'b:b@c/%0D%0Ad/e?f'
+    pathname: '/e',
+    path: '/e?f',
+    href: 'http://a%22%20%3C\'b:b@cd/e?f'
   },
 
   // Git urls used by npm
@@ -885,15 +885,15 @@ const parseTests = {
     protocol: 'https:',
     slashes: true,
     auth: null,
-    host: '',
+    host: '*',
     port: null,
-    hostname: '',
+    hostname: '*',
     hash: null,
     search: null,
     query: null,
-    pathname: '/*',
-    path: '/*',
-    href: 'https:///*'
+    pathname: '/',
+    path: '/',
+    href: 'https://*/'
   },
 
   // The following two URLs are the same, but they differ for a capital A.
@@ -975,22 +975,37 @@ const parseTests = {
     query: null,
     pathname: '/everybody',
     path: '/everybody',
-    href: '//fhqwhgads@example.com/everybody#to-the-limit',
+    href: '//fhqwhgads@example.com/everybody#to-the-limit'
   },
 
-  'http:@localhost': {
+  '\bhttp://example.com/\b': {
     protocol: 'http:',
-    slashes: null,
+    slashes: true,
     auth: null,
-    host: 'localhost',
+    host: 'example.com',
     port: null,
-    hostname: 'localhost',
+    hostname: 'example.com',
     hash: null,
     search: null,
     query: null,
     pathname: '/',
     path: '/',
-    href: 'http://localhost/',
+    href: 'http://example.com/'
+  },
+
+  'https://evil.com$.example.com': {
+    protocol: 'https:',
+    slashes: true,
+    auth: null,
+    host: 'evil.com$.example.com',
+    port: null,
+    hostname: 'evil.com$.example.com',
+    hash: null,
+    search: null,
+    query: null,
+    pathname: '/',
+    path: '/',
+    href: 'https://evil.com$.example.com/'
   },
 };
 
@@ -1008,7 +1023,7 @@ for (const u in parseTests) {
   assert.deepStrictEqual(
     actual,
     expected,
-    `expected ${inspect(expected)}, got ${inspect(actual)}`
+    `parsing ${u} and expected ${inspect(expected)} but got ${inspect(actual)}`
   );
   assert.deepStrictEqual(
     spaced,

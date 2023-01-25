@@ -6,19 +6,19 @@
 
 <!-- source_link=lib/tls.js -->
 
-The `tls` module provides an implementation of the Transport Layer Security
+The `node:tls` module provides an implementation of the Transport Layer Security
 (TLS) and Secure Socket Layer (SSL) protocols that is built on top of OpenSSL.
 The module can be accessed using:
 
 ```js
-const tls = require('tls');
+const tls = require('node:tls');
 ```
 
 ## Determining if crypto support is unavailable
 
 It is possible for Node.js to be built without including support for the
-`crypto` module. In such cases, attempting to `import` from `tls` or
-calling `require('tls')` will result in an error being thrown.
+`node:crypto` module. In such cases, attempting to `import` from `tls` or
+calling `require('node:tls')` will result in an error being thrown.
 
 When using CommonJS, the error thrown can be caught using try/catch:
 
@@ -27,7 +27,7 @@ When using CommonJS, the error thrown can be caught using try/catch:
 ```cjs
 let tls;
 try {
-  tls = require('tls');
+  tls = require('node:tls');
 } catch (err) {
   console.log('tls support is disabled!');
 }
@@ -40,12 +40,12 @@ a preload module).
 
 When using ESM, if there is a chance that the code may be run on a build
 of Node.js where crypto support is not enabled, consider using the
-`import()` function instead of the lexical `import` keyword:
+[`import()`][] function instead of the lexical `import` keyword:
 
 ```mjs
 let tls;
 try {
-  tls = await import('tls');
+  tls = await import('node:tls');
 } catch (err) {
   console.log('tls support is disabled!');
 }
@@ -127,10 +127,10 @@ the character "E" appended to the traditional abbreviations):
 * [ECDHE][]: An ephemeral version of the Elliptic Curve Diffie-Hellman
   key-agreement protocol.
 
-To use perfect forward secrecy using `DHE` with the `tls` module, it is required
-to generate Diffie-Hellman parameters and specify them with the `dhparam`
-option to [`tls.createSecureContext()`][]. The following illustrates the use of
-the OpenSSL command-line interface to generate such parameters:
+To use perfect forward secrecy using `DHE` with the `node:tls` module, it is
+required to generate Diffie-Hellman parameters and specify them with the
+`dhparam` option to [`tls.createSecureContext()`][]. The following illustrates
+the use of the OpenSSL command-line interface to generate such parameters:
 
 ```bash
 openssl dhparam -outform PEM -out dhparam.pem 2048
@@ -243,7 +243,7 @@ handlers.
 
 The servers encrypt the entire session state and send it
 to the client as a "ticket". When reconnecting, the state is sent to the server
-in the initial connection. This mechanism avoids the need for server-side
+in the initial connection. This mechanism avoids the need for a server-side
 session cache. If the server doesn't use the ticket, for any reason (failure
 to decrypt it, it's too old, etc.), it will create a new session and send a new
 ticket. See [RFC 5077][] for more information.
@@ -279,7 +279,7 @@ on disk, and they should be regenerated regularly.
 
 If clients advertise support for tickets, the server will send them. The
 server can disable tickets by supplying
-`require('constants').SSL_OP_NO_TICKET` in `secureOptions`.
+`require('node:constants').SSL_OP_NO_TICKET` in `secureOptions`.
 
 Both session identifiers and session tickets timeout, causing the server to
 create new sessions. The timeout can be configured with the `sessionTimeout`
@@ -384,9 +384,6 @@ used only if absolutely necessary.
 The default cipher suite prefers GCM ciphers for [Chrome's 'modern
 cryptography' setting][] and also prefers ECDHE and DHE ciphers for perfect
 forward secrecy, while offering _some_ backward compatibility.
-
-128 bit AES is preferred over 192 and 256 bit AES in light of [specific
-attacks affecting larger AES key sizes][].
 
 Old clients that rely on insecure and deprecated RC4 or DES-based ciphers
 (like Internet Explorer 6) cannot complete the handshaking process with
@@ -605,7 +602,7 @@ no OCSP response.
 
 Calling `callback(err)` will result in a `socket.destroy(err)` call.
 
-The typical flow of an OCSP Request is as follows:
+The typical flow of an OCSP request is as follows:
 
 1. Client connects to the server and sends an `'OCSPRequest'` (via the status
    info extension in ClientHello).
@@ -810,7 +807,7 @@ negotiation.
 Instances of `tls.TLSSocket` implement the duplex [Stream][] interface.
 
 Methods that return TLS connection metadata (e.g.
-[`tls.TLSSocket.getPeerCertificate()`][] will only return data while the
+[`tls.TLSSocket.getPeerCertificate()`][]) will only return data while the
 connection is open.
 
 ### `new tls.TLSSocket(socket[, options])`
@@ -958,6 +955,13 @@ tlsSocket.once('session', (session) => {
 
 <!-- YAML
 added: v0.11.4
+changes:
+  - version: v18.4.0
+    pr-url: https://github.com/nodejs/node/pull/43054
+    description: The `family` property now returns a string instead of a number.
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41431
+    description: The `family` property now returns a number instead of a string.
 -->
 
 * Returns: {Object}
@@ -981,10 +985,10 @@ property is set only when `tlsSocket.authorized === false`.
 added: v0.11.4
 -->
 
-* Returns: {boolean}
+* {boolean}
 
-Returns `true` if the peer certificate was signed by one of the CAs specified
-when creating the `tls.TLSSocket` instance, otherwise `false`.
+This property is `true` if the peer certificate was signed by one of the CAs
+specified when creating the `tls.TLSSocket` instance, otherwise `false`.
 
 ### `tlsSocket.disableRenegotiation()`
 
@@ -1094,17 +1098,17 @@ changes:
   * `name` {string} OpenSSL name for the cipher suite.
   * `standardName` {string} IETF name for the cipher suite.
   * `version` {string} The minimum TLS protocol version supported by this cipher
-    suite.
+    suite. For the actual negotiated protocol, see [`tls.TLSSocket.getProtocol()`][].
 
 Returns an object containing information on the negotiated cipher suite.
 
-For example:
+For example, a TLSv1.2 protocol with AES256-SHA cipher:
 
 ```json
 {
-    "name": "AES128-SHA256",
-    "standardName": "TLS_RSA_WITH_AES_128_CBC_SHA256",
-    "version": "TLSv1.2"
+    "name": "AES256-SHA",
+    "standardName": "TLS_RSA_WITH_AES_256_CBC_SHA",
+    "version": "SSLv3"
 }
 ```
 
@@ -1169,7 +1173,12 @@ certificate.
 
 <!-- YAML
 changes:
-  - version: v17.2.0
+  - version: v18.13.0
+    pr-url: https://github.com/nodejs/node/pull/44935
+    description: Add "ca" property.
+  - version:
+      - v17.2.0
+      - v16.14.0
     pr-url: https://github.com/nodejs/node/pull/39809
     description: Add fingerprint512.
   - version: v11.4.0
@@ -1180,6 +1189,7 @@ changes:
 A certificate object has properties corresponding to the fields of the
 certificate.
 
+* `ca` {boolean} `true` if a Certificate Authority (CA), `false` otherwise.
 * `raw` {Buffer} The DER encoded X.509 certificate data.
 * `subject` {Object} The certificate subject, described in terms of
   Country (`C`), StateOrProvince (`ST`), Locality (`L`), Organization (`O`),
@@ -1442,6 +1452,12 @@ Returns the numeric representation of the remote port. For example, `443`.
 
 <!-- YAML
 added: v0.11.8
+changes:
+  - version: v18.0.0
+    pr-url: https://github.com/nodejs/node/pull/41678
+    description: Passing an invalid callback to the `callback` argument
+                 now throws `ERR_INVALID_ARG_TYPE` instead of
+                 `ERR_INVALID_CALLBACK`.
 -->
 
 * `options` {Object}
@@ -1497,7 +1513,11 @@ decrease overall server throughput.
 <!-- YAML
 added: v0.8.4
 changes:
-  - version: v17.3.1
+  - version:
+      - v17.3.1
+      - v16.13.2
+      - v14.18.3
+      - v12.22.9
     pr-url: https://github.com/nodejs-private/node-private/pull/300
     description: Support for `uniformResourceIdentifier` subject alternative
                  names has been disabled in response to CVE-2021-44531.
@@ -1512,6 +1532,11 @@ Verifies the certificate `cert` is issued to `hostname`.
 
 Returns {Error} object, populating it with `reason`, `host`, and `cert` on
 failure. On success, returns {undefined}.
+
+This function is intended to be used in combination with the
+`checkServerIdentity` option that can be passed to [`tls.connect()`][] and as
+such operates on a [certificate object][]. For other purposes, consider using
+[`x509.checkHost()`][] instead.
 
 This function can be overwritten by providing an alternative function as the
 `options.checkServerIdentity` option that is passed to `tls.connect()`. The
@@ -1588,7 +1613,7 @@ changes:
   * `socket` {stream.Duplex} Establish secure connection on a given socket
     rather than creating a new socket. Typically, this is an instance of
     [`net.Socket`][], but any `Duplex` stream is allowed.
-    If this option is specified, `path`, `host` and `port` are ignored,
+    If this option is specified, `path`, `host`, and `port` are ignored,
     except for certificate validation. Usually, a socket is already connected
     when passed to `tls.connect()`, but it can be connected later.
     Connection/disconnection/destruction of `socket` is the user's
@@ -1623,8 +1648,8 @@ changes:
     More information can be found in the [RFC 4279][].
   * `ALPNProtocols`: {string\[]|Buffer\[]|TypedArray\[]|DataView\[]|Buffer|
     TypedArray|DataView}
-    An array of strings, `Buffer`s or `TypedArray`s or `DataView`s, or a
-    single `Buffer` or `TypedArray` or `DataView` containing the supported ALPN
+    An array of strings, `Buffer`s, `TypedArray`s, or `DataView`s, or a
+    single `Buffer`, `TypedArray`, or `DataView` containing the supported ALPN
     protocols. `Buffer`s should have the format `[len][name][len][name]...`
     e.g. `'\x08http/1.1\x08http/1.0'`, where the `len` byte is the length of the
     next protocol name. Passing an array is usually much simpler, e.g.
@@ -1678,8 +1703,8 @@ The following illustrates a client for the echo server example from
 
 ```js
 // Assumes an echo server that is listening on port 8000.
-const tls = require('tls');
-const fs = require('fs');
+const tls = require('node:tls');
+const fs = require('node:fs');
 
 const options = {
   // Necessary only if the server requires client certificate authentication.
@@ -2010,8 +2035,8 @@ changes:
 * `options` {Object}
   * `ALPNProtocols`: {string\[]|Buffer\[]|TypedArray\[]|DataView\[]|Buffer|
     TypedArray|DataView}
-    An array of strings, `Buffer`s or `TypedArray`s or `DataView`s, or a single
-    `Buffer` or `TypedArray` or `DataView` containing the supported ALPN
+    An array of strings, `Buffer`s, `TypedArray`s, or `DataView`s, or a single
+    `Buffer`, `TypedArray`, or `DataView` containing the supported ALPN
     protocols. `Buffer`s should have the format `[len][name][len][name]...`
     e.g. `0x05hello0x05world`, where the first byte is the length of the next
     protocol name. Passing an array is usually much simpler, e.g.
@@ -2070,7 +2095,7 @@ changes:
     in TLS 1.3. Upon failing to set pskIdentityHint `'tlsClientError'` will be
     emitted with `'ERR_TLS_PSK_SET_IDENTIY_HINT_FAILED'` code.
   * ...: Any [`tls.createSecureContext()`][] option can be provided. For
-    servers, the identity options (`pfx`, `key`/`cert` or `pskCallback`)
+    servers, the identity options (`pfx`, `key`/`cert`, or `pskCallback`)
     are usually required.
   * ...: Any [`net.createServer()`][] option can be provided.
 * `secureConnectionListener` {Function}
@@ -2079,14 +2104,14 @@ changes:
 Creates a new [`tls.Server`][]. The `secureConnectionListener`, if provided, is
 automatically set as a listener for the [`'secureConnection'`][] event.
 
-The `ticketKeys` options is automatically shared between `cluster` module
+The `ticketKeys` options is automatically shared between `node:cluster` module
 workers.
 
 The following illustrates a simple echo server:
 
 ```js
-const tls = require('tls');
-const fs = require('fs');
+const tls = require('node:tls');
+const fs = require('node:fs');
 
 const options = {
   key: fs.readFileSync('server-key.pem'),
@@ -2096,7 +2121,7 @@ const options = {
   requestCert: true,
 
   // This is necessary only if the client uses a self-signed certificate.
-  ca: [ fs.readFileSync('client-cert.pem') ]
+  ca: [ fs.readFileSync('client-cert.pem') ],
 };
 
 const server = tls.createServer(options, (socket) => {
@@ -2145,7 +2170,7 @@ added: v12.3.0
 * {string\[]}
 
 An immutable array of strings representing the root certificates (in PEM format)
-from the bundled Mozilla CA store as supplied by current Node.js version.
+from the bundled Mozilla CA store as supplied by the current Node.js version.
 
 The bundled CA store, as supplied by Node.js, is a snapshot of Mozilla CA store
 that is fixed at release time. It is identical on all supported platforms.
@@ -2221,6 +2246,7 @@ added: v11.4.0
 [`SSL_export_keying_material`]: https://www.openssl.org/docs/man1.1.1/man3/SSL_export_keying_material.html
 [`SSL_get_version`]: https://www.openssl.org/docs/man1.1.1/man3/SSL_get_version.html
 [`crypto.getCurves()`]: crypto.md#cryptogetcurves
+[`import()`]: https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/import
 [`net.Server.address()`]: net.md#serveraddress
 [`net.Server`]: net.md#class-netserver
 [`net.Socket`]: net.md#class-netsocket
@@ -2236,6 +2262,7 @@ added: v11.4.0
 [`tls.Server`]: #class-tlsserver
 [`tls.TLSSocket.enableTrace()`]: #tlssocketenabletrace
 [`tls.TLSSocket.getPeerCertificate()`]: #tlssocketgetpeercertificatedetailed
+[`tls.TLSSocket.getProtocol()`]: #tlssocketgetprotocol
 [`tls.TLSSocket.getSession()`]: #tlssocketgetsession
 [`tls.TLSSocket.getTLSTicket()`]: #tlssocketgettlsticket
 [`tls.TLSSocket`]: #class-tlstlssocket
@@ -2245,9 +2272,9 @@ added: v11.4.0
 [`tls.createServer()`]: #tlscreateserveroptions-secureconnectionlistener
 [`tls.getCiphers()`]: #tlsgetciphers
 [`tls.rootCertificates`]: #tlsrootcertificates
+[`x509.checkHost()`]: crypto.md#x509checkhostname-options
 [asn1.js]: https://www.npmjs.com/package/asn1.js
 [certificate object]: #certificate-object
 [cipher list format]: https://www.openssl.org/docs/man1.1.1/man1/ciphers.html#CIPHER-LIST-FORMAT
 [forward secrecy]: https://en.wikipedia.org/wiki/Perfect_forward_secrecy
 [perfect forward secrecy]: #perfect-forward-secrecy
-[specific attacks affecting larger AES key sizes]: https://www.schneier.com/blog/archives/2009/07/another_new_aes.html

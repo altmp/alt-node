@@ -46,7 +46,6 @@ using v8::PrimitiveArray;
 using v8::Promise;
 using v8::ScriptCompiler;
 using v8::ScriptOrigin;
-using v8::ScriptOrModule;
 using v8::String;
 using v8::UnboundModuleScript;
 using v8::Undefined;
@@ -179,8 +178,8 @@ void ModuleWrap::New(const FunctionCallbackInfo<Value>& args) {
       if (!args[5]->IsUndefined()) {
         CHECK(args[5]->IsArrayBufferView());
         Local<ArrayBufferView> cached_data_buf = args[5].As<ArrayBufferView>();
-        uint8_t* data = static_cast<uint8_t*>(
-            cached_data_buf->Buffer()->GetBackingStore()->Data());
+        uint8_t* data =
+            static_cast<uint8_t*>(cached_data_buf->Buffer()->Data());
         cached_data =
             new ScriptCompiler::CachedData(data + cached_data_buf->ByteOffset(),
                                            cached_data_buf->ByteLength());
@@ -429,13 +428,7 @@ void ModuleWrap::Evaluate(const FunctionCallbackInfo<Value>& args) {
     return;
   }
 
-  // If TLA is enabled, `result` is the evaluation's promise.
-  // Otherwise, `result` is the last evaluated value of the module,
-  // which could be a promise, which would result in it being incorrectly
-  // unwrapped when the higher level code awaits the evaluation.
-  if (env->isolate_data()->options()->experimental_top_level_await) {
-    args.GetReturnValue().Set(result.ToLocalChecked());
-  }
+  args.GetReturnValue().Set(result.ToLocalChecked());
 }
 
 void ModuleWrap::GetNamespace(const FunctionCallbackInfo<Value>& args) {
@@ -559,7 +552,8 @@ MaybeLocal<Module> ModuleWrap::ResolveModuleCallback(
 
 static MaybeLocal<Promise> ImportModuleDynamically(
     Local<Context> context,
-    Local<ScriptOrModule> referrer,
+    Local<v8::Data> host_defined_options,
+    Local<Value> resource_name,
     Local<String> specifier,
     Local<FixedArray> import_assertions) {
   Isolate* isolate = context->GetIsolate();
@@ -574,7 +568,7 @@ static MaybeLocal<Promise> ImportModuleDynamically(
   Local<Function> import_callback =
     env->host_import_module_dynamically_callback();
 
-  Local<PrimitiveArray> options = referrer->GetHostDefinedOptions();
+  Local<FixedArray> options = host_defined_options.As<FixedArray>();
   if (options->Length() != HostDefinedOptions::kLength) {
     Local<Promise::Resolver> resolver;
     if (!Promise::Resolver::New(context).ToLocal(&resolver)) return {};
@@ -588,11 +582,11 @@ static MaybeLocal<Promise> ImportModuleDynamically(
 
   Local<Value> object;
 
-  int type = options->Get(isolate, HostDefinedOptions::kType)
+  int type = options->Get(context, HostDefinedOptions::kType)
                  .As<Number>()
                  ->Int32Value(context)
                  .ToChecked();
-  uint32_t id = options->Get(isolate, HostDefinedOptions::kID)
+  uint32_t id = options->Get(context, HostDefinedOptions::kID)
                     .As<Number>()
                     ->Uint32Value(context)
                     .ToChecked();
@@ -771,31 +765,37 @@ void ModuleWrap::Initialize(Local<Object> target,
                             Local<Context> context,
                             void* priv) {
   Environment* env = Environment::GetCurrent(context);
+  Isolate* isolate = env->isolate();
 
-  Local<FunctionTemplate> tpl = env->NewFunctionTemplate(New);
+  Local<FunctionTemplate> tpl = NewFunctionTemplate(isolate, New);
   tpl->InstanceTemplate()->SetInternalFieldCount(
       ModuleWrap::kInternalFieldCount);
   tpl->Inherit(BaseObject::GetConstructorTemplate(env));
 
-  env->SetProtoMethod(tpl, "link", Link);
-  env->SetProtoMethod(tpl, "instantiate", Instantiate);
-  env->SetProtoMethod(tpl, "evaluate", Evaluate);
-  env->SetProtoMethod(tpl, "setExport", SetSyntheticExport);
-  env->SetProtoMethodNoSideEffect(tpl, "createCachedData", CreateCachedData);
-  env->SetProtoMethodNoSideEffect(tpl, "getNamespace", GetNamespace);
-  env->SetProtoMethodNoSideEffect(tpl, "getStatus", GetStatus);
-  env->SetProtoMethodNoSideEffect(tpl, "getError", GetError);
-  env->SetProtoMethodNoSideEffect(tpl, "getStaticDependencySpecifiers",
-                                  GetStaticDependencySpecifiers);
+  SetProtoMethod(isolate, tpl, "link", Link);
+  SetProtoMethod(isolate, tpl, "instantiate", Instantiate);
+  SetProtoMethod(isolate, tpl, "evaluate", Evaluate);
+  SetProtoMethod(isolate, tpl, "setExport", SetSyntheticExport);
+  SetProtoMethodNoSideEffect(
+      isolate, tpl, "createCachedData", CreateCachedData);
+  SetProtoMethodNoSideEffect(isolate, tpl, "getNamespace", GetNamespace);
+  SetProtoMethodNoSideEffect(isolate, tpl, "getStatus", GetStatus);
+  SetProtoMethodNoSideEffect(isolate, tpl, "getError", GetError);
+  SetProtoMethodNoSideEffect(isolate,
+                             tpl,
+                             "getStaticDependencySpecifiers",
+                             GetStaticDependencySpecifiers);
 
-  env->SetConstructorFunction(target, "ModuleWrap", tpl);
+  SetConstructorFunction(context, target, "ModuleWrap", tpl);
 
-  env->SetMethod(target,
-                 "setImportModuleDynamicallyCallback",
-                 SetImportModuleDynamicallyCallback);
-  env->SetMethod(target,
-                 "setInitializeImportMetaObjectCallback",
-                 SetInitializeImportMetaObjectCallback);
+  SetMethod(context,
+            target,
+            "setImportModuleDynamicallyCallback",
+            SetImportModuleDynamicallyCallback);
+  SetMethod(context,
+            target,
+            "setInitializeImportMetaObjectCallback",
+            SetInitializeImportMetaObjectCallback);
 
 #define V(name)                                                                \
     target->Set(context,                                                       \

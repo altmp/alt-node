@@ -201,9 +201,9 @@ GitHub projects using CMake.js.
 #### prebuildify
 
 [prebuildify][] is a tool based on node-gyp. The advantage of prebuildify is
-that the built binaries are bundled with the native module when it's
+that the built binaries are bundled with the native addon when it's
 uploaded to npm. The binaries are downloaded from npm and are immediately
-available to the module user when the native module is installed.
+available to the module user when the native addon is installed.
 
 ## Usage
 
@@ -579,6 +579,7 @@ typedef enum {
   napi_arraybuffer_expected,
   napi_detachable_arraybuffer_expected,
   napi_would_deadlock,  /* unused */
+  napi_no_external_buffers_allowed
 } napi_status;
 ```
 
@@ -897,6 +898,24 @@ typedef void (*napi_threadsafe_function_call_js)(napi_env env,
 Unless for reasons discussed in [Object Lifetime Management][], creating a
 handle and/or callback scope inside the function body is not necessary.
 
+#### `napi_cleanup_hook`
+
+<!-- YAML
+added: v18.13.0
+napiVersion: 3
+-->
+
+Function pointer used with [`napi_add_env_cleanup_hook`][]. It will be called
+when the environment is being torn down.
+
+Callback functions must satisfy the following signature:
+
+```c
+typedef void (*napi_cleanup_hook)(void* data);
+```
+
+* `[in] data`: The data that was passed to [`napi_add_env_cleanup_hook`][].
+
 #### `napi_async_cleanup_hook`
 
 <!-- YAML
@@ -1182,13 +1201,18 @@ This API throws a JavaScript `RangeError` with the text provided.
 #### `node_api_throw_syntax_error`
 
 <!-- YAML
-added: v17.2.0
+added:
+  - v17.2.0
+  - v16.14.0
 -->
 
-````c
+> Stability: 1 - Experimental
+
+```c
 NAPI_EXTERN napi_status node_api_throw_syntax_error(napi_env env,
                                                     const char* code,
                                                     const char* msg);
+```
 
 * `[in] env`: The environment that the API is invoked under.
 * `[in] code`: Optional error code to be set on the error.
@@ -1209,7 +1233,7 @@ napiVersion: 1
 NAPI_EXTERN napi_status napi_is_error(napi_env env,
                                       napi_value value,
                                       bool* result);
-````
+```
 
 * `[in] env`: The environment that the API is invoked under.
 * `[in] value`: The `napi_value` to be checked.
@@ -1298,8 +1322,12 @@ This API returns a JavaScript `RangeError` with the text provided.
 #### `node_api_create_syntax_error`
 
 <!-- YAML
-added: v17.2.0
+added:
+  - v17.2.0
+  - v16.14.0
 -->
+
+> Stability: 1 - Experimental
 
 ```c
 NAPI_EXTERN napi_status node_api_create_syntax_error(napi_env env,
@@ -1375,7 +1403,7 @@ callback throws an exception with no way to recover.
 
 ### Fatal errors
 
-In the event of an unrecoverable error in a native module, a fatal error can be
+In the event of an unrecoverable error in a native addon, a fatal error can be
 thrown to immediately terminate the process.
 
 #### `napi_fatal_error`
@@ -1789,7 +1817,7 @@ napiVersion: 3
 
 ```c
 NODE_EXTERN napi_status napi_add_env_cleanup_hook(napi_env env,
-                                                  void (*fun)(void* arg),
+                                                  napi_cleanup_hook fun,
                                                   void* arg);
 ```
 
@@ -2394,6 +2422,19 @@ napi_create_external_arraybuffer(napi_env env,
 
 Returns `napi_ok` if the API succeeded.
 
+**Some runtimes other than Node.js have dropped support for external buffers**.
+On runtimes other than Node.js this method may return
+`napi_no_external_buffers_allowed` to indicate that external
+buffers are not supported. One such runtime is Electron as
+described in this issue
+[electron/issues/35801](https://github.com/electron/electron/issues/35801).
+
+In order to maintain broadest compatibility with all runtimes
+you may define `NODE_API_NO_EXTERNAL_BUFFERS_ALLOWED` in your addon before
+includes for the node-api headers. Doing so will hide the 2 functions
+that create external buffers. This will ensure a compilation error
+occurs if you accidentally use one of these methods.
+
 This API returns a Node-API value corresponding to a JavaScript `ArrayBuffer`.
 The underlying byte buffer of the `ArrayBuffer` is externally allocated and
 managed. The caller must ensure that the byte buffer remains valid until the
@@ -2437,6 +2478,19 @@ napi_status napi_create_external_buffer(napi_env env,
 * `[out] result`: A `napi_value` representing a `node::Buffer`.
 
 Returns `napi_ok` if the API succeeded.
+
+**Some runtimes other than Node.js have dropped support for external buffers**.
+On runtimes other than Node.js this method may return
+`napi_no_external_buffers_allowed` to indicate that external
+buffers are not supported. One such runtime is Electron as
+described in this issue
+[electron/issues/35801](https://github.com/electron/electron/issues/35801).
+
+In order to maintain broadest compatibility with all runtimes
+you may define `NODE_API_NO_EXTERNAL_BUFFERS_ALLOWED` in your addon before
+includes for the node-api headers. Doing so will hide the 2 functions
+that create external buffers. This will ensure a compilation error
+occurs if you accidentally use one of these methods.
 
 This API allocates a `node::Buffer` object and initializes it with data
 backed by the passed in buffer. While this is still a fully-supported data
@@ -2503,7 +2557,6 @@ of the ECMAScript Language Specification.
 
 <!-- YAML
 added: v17.5.0
-napiVersion: v17.5.0
 -->
 
 > Stability: 1 - Experimental
@@ -3963,7 +4016,7 @@ reasons. Consider the following JavaScript:
 const obj = {};
 Object.defineProperties(obj, {
   'foo': { value: 123, writable: true, configurable: true, enumerable: true },
-  'bar': { value: 456, writable: true, configurable: true, enumerable: true }
+  'bar': { value: 456, writable: true, configurable: true, enumerable: true },
 });
 ```
 
@@ -4723,8 +4776,8 @@ napi_status napi_get_cb_info(napi_env env,
   provided than claimed, the rest of `argv` is filled with `napi_value` values
   that represent `undefined`. `argv` can optionally be ignored by
   passing `NULL`.
-* `[out] this`: Receives the JavaScript `this` argument for the call. `this`
-  can optionally be ignored by passing `NULL`.
+* `[out] thisArg`: Receives the JavaScript `this` argument for the call.
+  `thisArg` can optionally be ignored by passing `NULL`.
 * `[out] data`: Receives the data pointer for the callback. `data` can
   optionally be ignored by passing `NULL`.
 
@@ -5118,6 +5171,11 @@ _Caution_: The optional returned reference (if obtained) should be deleted via
 invocation. If it is deleted before then, then the finalize callback may never
 be invoked. Therefore, when obtaining a reference a finalize callback is also
 required in order to enable correct disposal of the reference.
+
+Finalizer callbacks may be deferred, leaving a window where the object has
+been garbage collected (and the weak reference is invalid) but the finalizer
+hasn't been called yet. When using `napi_get_reference_value()` on weak
+references returned by `napi_wrap()`, you should still handle an empty result.
 
 Calling `napi_wrap()` a second time on an object will return an error. To
 associate another native instance with the object, use `napi_remove_wrap()`
@@ -5709,7 +5767,7 @@ Returns `napi_ok` if the API succeeded.
 
 This function gives V8 an indication of the amount of externally allocated
 memory that is kept alive by JavaScript objects (i.e. a JavaScript object
-that points to its own memory allocated by a native module). Registering
+that points to its own memory allocated by a native addon). Registering
 externally allocated memory will trigger global garbage collections more
 often than it would otherwise.
 
