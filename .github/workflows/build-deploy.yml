@@ -27,9 +27,13 @@ jobs:
       - name: Build
         shell: cmd
         run: |
+          echo Building...
           cd alt-build && call alt-release.bat
           cd ..
           mkdir dist
+          echo Copying files...
+          cd C:/
+          dir /b/s libnode.dll
           copy out\Release\libnode.lib dist
           copy out\Release\libnode.dll dist
 
@@ -41,6 +45,7 @@ jobs:
   build-windows-debug:
     name: Build windows debug
     runs-on: windows-2019
+    if: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -72,6 +77,7 @@ jobs:
   build-linux-release:
     name: Build linux release
     runs-on: ubuntu-20.04
+    if: false
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -98,6 +104,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-18.04
+    if: false
     needs:
       - build-windows-release
       - build-windows-debug
