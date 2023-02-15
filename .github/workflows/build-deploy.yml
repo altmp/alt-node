@@ -104,19 +104,19 @@ jobs:
       - build-linux-release
     steps:
       - name: Download windows release artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: node-windows-release
           path: dist-windows-release
 
       - name: Download windows debug artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: node-windows-debug
           path: dist-windows-debug
 
       - name: Download linux release artifacts
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: node-linux-release
           path: dist-linux-release
@@ -208,7 +208,7 @@ jobs:
     if: ${{ always() }}
     steps:
       - name: Delete artifacts
-        uses: geekyeggo/delete-artifact@v1
+        uses: geekyeggo/delete-artifact@v2
         with:
           name: |
             node-windows-release
