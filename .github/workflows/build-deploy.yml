@@ -27,13 +27,9 @@ jobs:
       - name: Build
         shell: cmd
         run: |
-          echo Building...
           cd alt-build && call alt-release.bat
           cd ..
           mkdir dist
-          echo Copying files...
-          cd C:/
-          dir /b/s libnode.dll
           copy out\Release\libnode.lib dist
           copy out\Release\libnode.dll dist
 
