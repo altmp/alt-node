@@ -151,31 +151,31 @@ def files(action):
 
   if 'true' == variables.get('node_shared'):
     if is_windows:
-      action([output_prefix + 'libnode.dll'], 'bin/libnode.dll')
-      action([output_prefix + 'libnode.lib'], 'lib/libnode.lib')
+      action([output_prefix + 'libnodev2.dll'], 'bin/libnodev2.dll')
+      action([output_prefix + 'libnodev2.lib'], 'lib/libnodev2.lib')
     elif sys.platform == 'zos':
       # GYP will output to lib.target; see _InstallableTargetInstallPath
       # function in tools/gyp/pylib/gyp/generator/make.py
       output_prefix += 'lib.target/'
 
-      output_lib = 'libnode.' + variables.get('shlib_suffix')
+      output_lib = 'libnodev2.' + variables.get('shlib_suffix')
       action([output_prefix + output_lib], 'lib/' + output_lib)
 
-      # create libnode.x that references libnode.so (C++ addons compat)
+      # create libnodev2.x that references libnodev2.so (C++ addons compat)
       os.system(os.path.dirname(os.path.realpath(__file__)) +
                 '/zos/modifysidedeck.sh ' +
                 abspath(install_path, 'lib/' + output_lib) + ' ' +
-                abspath(install_path, 'lib/libnode.x') + ' libnode.so')
+                abspath(install_path, 'lib/libnodev2.x') + ' libnodev2.so')
 
-      # install libnode.version.so
-      so_name = 'libnode.' + re.sub(r'\.x$', '.so', variables.get('shlib_suffix'))
+      # install libnodev2.version.so
+      so_name = 'libnodev2.' + re.sub(r'\.x$', '.so', variables.get('shlib_suffix'))
       action([output_prefix + so_name], variables.get('libdir') + '/' + so_name)
 
-      # create symlink of libnode.so -> libnode.version.so (C++ addons compat)
-      link_path = abspath(install_path, 'lib/libnode.so')
+      # create symlink of libnodev2.so -> libnodev2.version.so (C++ addons compat)
+      link_path = abspath(install_path, 'lib/libnodev2.so')
       try_symlink(so_name, link_path)
     else:
-      output_lib = 'libnode.' + variables.get('shlib_suffix')
+      output_lib = 'libnodev2.' + variables.get('shlib_suffix')
       action([output_prefix + output_lib], variables.get('libdir') + '/' + output_lib)
   if 'true' == variables.get('node_use_dtrace'):
     action(['out/Release/node.d'], 'lib/dtrace/node.d')

@@ -26,7 +26,7 @@
     'node_v8_options%': '',
     'node_enable_v8_vtunejit%': 'false',
     'node_core_target_name%': 'node',
-    'node_lib_target_name%': 'libnode',
+    'node_lib_target_name%': 'libnodev2',
     'node_intermediate_lib_type%': 'static_library',
     'node_builtin_modules_path%': '',
     # We list the deps/ files out instead of globbing them in js2c.py since we

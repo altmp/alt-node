@@ -486,8 +486,8 @@ if not defined noetw (
     if errorlevel 1 echo Cannot copy node_etw_provider.man && goto package_error
 )
 if defined dll (
-  copy /Y libnode.dll %TARGET_NAME%\ > nul
-  if errorlevel 1 echo Cannot copy libnode.dll && goto package_error
+  copy /Y libnodev2.dll %TARGET_NAME%\ > nul
+  if errorlevel 1 echo Cannot copy libnodev2.dll && goto package_error
 
   mkdir %TARGET_NAME%\Release > nul
   copy /Y node.def %TARGET_NAME%\Release\ > nul
