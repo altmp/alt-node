@@ -97,7 +97,7 @@ jobs:
 
   deploy:
     name: Deploy
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs:
       - build-windows-release
       - build-windows-debug
@@ -203,7 +203,7 @@ jobs:
 
   delete-artifacts:
     name: Delete artifacts
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     needs: [ deploy ]
     if: ${{ always() }}
     steps:
