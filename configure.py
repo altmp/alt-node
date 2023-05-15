@@ -1443,7 +1443,7 @@ def configure_node(o):
   elif sys.platform.startswith('zos'):
     shlib_suffix = '%s.x'
   else:
-    shlib_suffix = 'so.%s'
+    shlib_suffix = 'so'
   if '%s' in shlib_suffix:
     shlib_suffix %= node_module_version
 
