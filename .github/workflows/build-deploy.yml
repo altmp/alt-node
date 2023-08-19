@@ -93,7 +93,7 @@ jobs:
       - name: Build aarch64
         run: |
           sudo apt-get install cmake build-essential binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu g++-aarch64-linux-gnu python3 make python3-pip
-          chmod +rwx alt-release-aarch64.sh
+          chmod +rwx alt-build/alt-release-aarch64.sh
           cd alt-build && bash alt-release-aarch64.sh
           cd ..
           mkdir dist_aarch64
