@@ -90,10 +90,25 @@ jobs:
           mkdir dist
           cp ./out/Release/libnodev2.so dist/libnodev2.so
 
+      - name: Build aarch64
+        run: |
+          sudo apt-get install cmake build-essential binutils-aarch64-linux-gnu gcc-aarch64-linux-gnu g++-aarch64-linux-gnu python3 make python3-pip
+          ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
+          chmod +rwx alt-build/alt-release-aarch64.sh
+          cd alt-build && bash alt-release-aarch64.sh
+          cd ..
+          mkdir dist_aarch64
+          cp ./out/Release/libnodev2.so dist_aarch64/libnodev2.so
+
       - uses: actions/upload-artifact@v3
         with:
           name: node-linux-release
           path: ./dist/
+
+      - uses: actions/upload-artifact@v3
+        with:
+          name: node-linux-release-aarch64
+          path: ./dist_aarch64/
 
   deploy:
     name: Deploy
@@ -121,11 +136,18 @@ jobs:
           name: node-linux-release
           path: dist-linux-release
 
+      - name: Download linux aarch64 release artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: node-linux-release-aarch64
+          path: dist-linux-release-aarch64
+
       - name: Zip artifacts
         run: |
           zip -r -j node-windows-release dist-windows-release
           zip -r -j node-windows-debug dist-windows-debug
           zip -r -j node-linux-release dist-linux-release
+          zip -r -j node-linux-release-aarch64 dist-linux-release-aarch64
 
       - name: Create Release
         id: create_release
@@ -166,6 +188,16 @@ jobs:
           asset_name: node-linux-release.zip
           asset_content_type: application/zip
 
+      - name: Upload linux aarch64 release artifacts
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./node-linux-release-aarch64.zip
+          asset_name: node-linux-release-aarch64.zip
+          asset_content_type: application/zip
+
       - name: Extract version
         id: version
         shell: bash
@@ -201,6 +233,14 @@ jobs:
           BRANCH: ${{ steps.version.outputs.BRANCH }}
           VERSION: ${{ steps.version.outputs.VERSION }}
 
+      - name: Upload linux aarch64 files to CDN
+        run: npx alt-upload dist-linux-release-aarch64 deps/nodejs/v2/$BRANCH/aarch64_linux $VERSION
+        env:
+          CI_UPLOAD_URL: ${{ secrets.CI_UPLOAD_URL }}
+          CI_DEPLOY_TOKEN: ${{ secrets.CI_DEPLOY_TOKEN }}
+          BRANCH: ${{ steps.version.outputs.BRANCH }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
   delete-artifacts:
     name: Delete artifacts
     runs-on: ubuntu-20.04
@@ -214,3 +254,4 @@ jobs:
             node-windows-release
             node-windows-debug
             node-linux-release
+            node-linux-release-aarch64
